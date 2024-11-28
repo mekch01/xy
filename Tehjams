@@ -1,0 +1,119 @@
+import React, { useState, useEffect } from 'react';
+import ReactDOM from 'react-dom/client';
+import { IInputs, IOutputs } from "./generated/ManifestTypes";
+
+const ConflictQuestionnaire = ({ context }: { context: ComponentFramework.Context<IInputs> }) => {
+  const [questions, setQuestions] = useState<any[]>([]);
+  const [dependencies, setDependencies] = useState<any[]>([]);
+  const [options, setOptions] = useState<Record<string, any[]>>({});
+  const [visibleQuestions, setVisibleQuestions] = useState<any[]>([]);
+
+  // Fetch data dynamically on component mount
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch all questions
+        const questionsResponse = await context.webAPI.retrieveMultipleRecords("cnflcts_conflictsquestion");
+        const fetchedQuestions = questionsResponse.entities;
+
+        // Fetch all dependencies
+        const dependenciesResponse = await context.webAPI.retrieveMultipleRecords("cnflcts_conflictsdependency");
+        const fetchedDependencies = dependenciesResponse.entities;
+
+        // Fetch all options and group them by Conflict Question
+        const optionsResponse = await context.webAPI.retrieveMultipleRecords("cnflcts_conflictsoption");
+        const groupedOptions = fetchedQuestions.reduce((acc: any, question: any) => {
+          acc[question.cnflcts_conflictsquestionid] = optionsResponse.entities.filter(
+            (opt: any) => opt.cnflcts_conflictsquestionid === question.cnflcts_conflictsquestionid
+          );
+          return acc;
+        }, {});
+
+        // Set state
+        setQuestions(fetchedQuestions);
+        setDependencies(fetchedDependencies);
+        setOptions(groupedOptions);
+
+        // Initialize visible questions (where Dependent = No)
+        const rootQuestions = fetchedQuestions.filter((q: any) => !q.cnflcts_dependent);
+        setVisibleQuestions(rootQuestions);
+      } catch (error) {
+        console.error("Error fetching data:", error);
+      }
+    };
+
+    fetchData();
+  }, [context]);
+
+  const handleAnswer = (questionId: string, answer: string) => {
+    // Find dependent questions based on the answer
+    const followUps = dependencies
+      .filter((dep: any) => dep.cnflcts_selected === answer && dep.cnflcts_conflictsquestionid === questionId)
+      .map((dep: any) =>
+        questions.find((q: any) => q.cnflcts_conflictsquestionid === dep.cnflcts_dependentconflictsquestionid)
+      )
+      .filter(Boolean);
+
+    // Update visible questions, ensuring no duplicates
+    setVisibleQuestions((prev) => [...prev, ...followUps.filter((q: any) => !prev.includes(q))]);
+  };
+
+  return (
+    <div>
+      {visibleQuestions.map((q: any) => (
+        <div key={q.cnflcts_conflictsquestionid} style={{ marginBottom: "20px" }}>
+          <label>{q.cnflcts_question}</label>
+          {q.cnflcts_questiontype === "Yes/No" ? (
+            <div>
+              <button onClick={() => handleAnswer(q.cnflcts_conflictsquestionid, "yes")}>Yes</button>
+              <button onClick={() => handleAnswer(q.cnflcts_conflictsquestionid, "no")}>No</button>
+            </div>
+          ) : q.cnflcts_questiontype === "Options" ? (
+            <select onChange={(e) => handleAnswer(q.cnflcts_conflictsquestionid, e.target.value)}>
+              <option value="">Select</option>
+              {options[q.cnflcts_conflictsquestionid]?.map((opt: any) => (
+                <option key={opt.cnflcts_optionid} value={opt.cnflcts_option}>
+                  {opt.cnflcts_option}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input type="text" placeholder="Your answer..." />
+          )}
+        </div>
+      ))}
+    </div>
+  );
+};
+
+// Append the React control dynamically
+function appendConflictControl(container: HTMLElement, context: ComponentFramework.Context<IInputs>) {
+  const tempContainer = document.createElement('div');
+  container.appendChild(tempContainer);
+
+  const root = ReactDOM.createRoot(tempContainer); // For React 18+
+  root.render(<ConflictQuestionnaire context={context} />);
+}
+
+export class ConflictPCF implements ComponentFramework.StandardControl<IInputs, IOutputs> {
+  private container: HTMLDivElement;
+  private context: ComponentFramework.Context<IInputs>;
+
+  constructor() {}
+
+  init(context: ComponentFramework.Context<IInputs>, notifyOutputChanged: () => void, state: ComponentFramework.Dictionary, container: HTMLDivElement) {
+    this.container = container;
+    this.context = context;
+
+    // Render the React control
+    appendConflictControl(container, context);
+  }
+
+  updateView(context: ComponentFramework.Context<IInputs>): void {
+    // Handle updates if needed
+  }
+
+  destroy(): void {
+    // Cleanup if needed
+  }
+}
