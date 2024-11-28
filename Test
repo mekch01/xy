@@ -1,0 +1,151 @@
+import { IInputs, IOutputs } from "./generated/ManifestTypes";
+import { ChoiceGroup, IChoiceGroupOption, Dropdown, IDropdownOption } from "@fluentui/react";
+
+export class ConflictsQuestionsControl implements ComponentFramework.StandardControl<IInputs, IOutputs> {
+  private container: HTMLDivElement;
+  private context: ComponentFramework.Context<IInputs>;
+  private dependencyAPI: string;
+
+  public init(
+    context: ComponentFramework.Context<IInputs>,
+    notifyOutputChanged: () => void,
+    state: ComponentFramework.Dictionary,
+    container: HTMLDivElement
+  ): void {
+    this.context = context;
+    this.container = container;
+    this.dependencyAPI = context.parameters.dependencyAPI.raw || "";
+
+    // Render UI
+    this.renderQuestions();
+  }
+
+  // Fetch data from a table
+  private async fetchTableData(entity: string, filter: string): Promise<any[]> {
+    const query = `$filter=${encodeURIComponent(filter)}`;
+    const result = await this.context.webAPI.retrieveMultipleRecords(entity, query);
+    return result.entities || [];
+  }
+
+  // Render the list of questions
+  private async renderQuestions(): Promise<void> {
+    this.container.innerHTML = "";
+
+    // Fetch Conflict Questions with Dependent = No
+    const questions = await this.fetchTableData(
+      "conflicts_question",
+      "dependent eq false"
+    );
+
+    for (const question of questions) {
+      this.renderQuestion(question);
+    }
+  }
+
+  // Render a single question
+  private async renderQuestion(question: any): Promise<void> {
+    const questionDiv = document.createElement("div");
+    questionDiv.classList.add("question-item");
+
+    // Render question text
+    const questionText = document.createElement("label");
+    questionText.innerText = question["cnflcts_question"];
+    questionDiv.appendChild(questionText);
+
+    const questionType = question["cnflcts_questiontype"];
+
+    // Render Yes/No or Options based on Question Type
+    if (questionType === "Yes No") {
+      this.renderYesNoControl(question, questionDiv);
+    } else if (questionType === "Options") {
+      await this.renderOptionsControl(question, questionDiv);
+    }
+
+    this.container.appendChild(questionDiv);
+  }
+
+  // Render Yes/No control
+  private renderYesNoControl(question: any, container: HTMLElement): void {
+    const options: IChoiceGroupOption[] = [
+      { key: "Yes", text: "Yes" },
+      { key: "No", text: "No" }
+    ];
+
+    const yesNoControl = ChoiceGroup({
+      options: options,
+      onChange: (event, option) => this.handleYesNoChange(option, question)
+    });
+
+    container.appendChild(yesNoControl);
+  }
+
+  // Handle Yes/No change
+  private async handleYesNoChange(option: IChoiceGroupOption, question: any): Promise<void> {
+    const selectedValue = option.key;
+
+    // Fetch dependencies from Conflicts Dependency table
+    const dependencies = await this.fetchTableData(
+      "conflicts_dependency",
+      `conflictsquestionid eq ${question.cnflcts_conflictsquestionid} and cnflcts_selected eq '${selectedValue}'`
+    );
+
+    if (dependencies.length > 0) {
+      // Render dependent question
+      const dependentQuestionId = dependencies[0]["cnflcts_dependentconflictsquestionid"];
+      const dependentQuestion = await this.fetchTableData("conflicts_question", `cnflcts_conflictsquestionid eq ${dependentQuestionId}`);
+      this.renderQuestion(dependentQuestion[0]);
+    }
+  }
+
+  // Render Options control
+  private async renderOptionsControl(question: any, container: HTMLElement): Promise<void> {
+    // Fetch Options from Conflicts Option table
+    const optionsData = await this.fetchTableData(
+      "conflicts_option",
+      `conflictsquestionid eq ${question.cnflcts_conflictsquestionid}`
+    );
+
+    const dropdownOptions: IDropdownOption[] = optionsData.map(option => ({
+      key: option.cnflcts_optionid,
+      text: option.cnflcts_option
+    }));
+
+    const dropdownControl = Dropdown({
+      placeholder: "Select an option",
+      options: dropdownOptions,
+      onChange: (event, option) => this.handleOptionsChange(option, question)
+    });
+
+    container.appendChild(dropdownControl);
+  }
+
+  // Handle Options change
+  private async handleOptionsChange(option: IDropdownOption, question: any): Promise<void> {
+    const selectedValue = option.key;
+
+    // Fetch dependencies from Conflicts Dependency table
+    const dependencies = await this.fetchTableData(
+      "conflicts_dependency",
+      `conflictsquestionid eq ${question.cnflcts_conflictsquestionid} and dependentconflictsoptionid eq '${selectedValue}'`
+    );
+
+    if (dependencies.length > 0) {
+      // Render dependent question
+      const dependentQuestionId = dependencies[0]["cnflcts_dependentconflictsquestionid"];
+      const dependentQuestion = await this.fetchTableData("conflicts_question", `cnflcts_conflictsquestionid eq ${dependentQuestionId}`);
+      this.renderQuestion(dependentQuestion[0]);
+    }
+  }
+
+  public updateView(context: ComponentFramework.Context<IInputs>): void {
+    this.context = context;
+  }
+
+  public getOutputs(): IOutputs {
+    return {};
+  }
+
+  public destroy(): void {
+    // Cleanup if necessary
+  }
+}
