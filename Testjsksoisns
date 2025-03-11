@@ -1,0 +1,145 @@
+import { Locator, Page } from '@playwright/test';
+
+export class Dynamics365NavigationPage {
+  private readonly page: Page;
+
+  // Locators for the navigation menu items
+  private readonly homeLink: Locator;
+  private readonly recentLink: Locator;
+  private readonly pinnedLink: Locator;
+  private readonly conflictsLink: Locator;
+  private readonly dashboardLink: Locator;
+  private readonly accountsLink: Locator;
+  private readonly conflictsRequestsLink: Locator;
+  private readonly conflictsQuestionsLink: Locator;
+  private readonly sourceSystemsLink: Locator;
+  private readonly conflictsTriggersLink: Locator;
+  private readonly esimLink: Locator;
+  private readonly esimQuestionsLink: Locator;
+  private readonly esimRequestsLink: Locator;
+
+  constructor(page: Page) {
+    this.page = page;
+
+    // Initialize locators for the navigation menu items
+    this.homeLink = page.locator('text=Home');
+    this.recentLink = page.locator('text=Recent');
+    this.pinnedLink = page.locator('text=Pinned');
+    this.conflictsLink = page.locator('text=Conflicts');
+    this.dashboardLink = page.locator('text=Dashboard');
+    this.accountsLink = page.locator('text=Accounts');
+    this.conflictsRequestsLink = page.locator('text=Conflicts Requests');
+    this.conflictsQuestionsLink = page.locator('text=Conflicts Questions');
+    this.sourceSystemsLink = page.locator('text=Source Systems');
+    this.conflictsTriggersLink = page.locator('text=Conflicts Triggers');
+    this.esimLink = page.locator('text=ESIM');
+    this.esimQuestionsLink = page.locator('text=ESIM Questions');
+    this.esimRequestsLink = page.locator('text=ESIM Requests');
+  }
+
+  // Navigation methods
+  async navigateToHome() {
+    await this.homeLink.click();
+  }
+
+  async navigateToRecent() {
+    await this.recentLink.click();
+  }
+
+  async navigateToPinned() {
+    await this.pinnedLink.click();
+  }
+
+  async navigateToConflicts() {
+    await this.conflictsLink.click();
+  }
+
+  async navigateToDashboard() {
+    await this.dashboardLink.click();
+  }
+
+  async navigateToAccounts() {
+    await this.accountsLink.click();
+  }
+
+  async navigateToConflictsRequests() {
+    await this.conflictsRequestsLink.click();
+  }
+
+  async navigateToConflictsQuestions() {
+    await this.conflictsQuestionsLink.click();
+  }
+
+  async navigateToSourceSystems() {
+    await this.sourceSystemsLink.click();
+  }
+
+  async navigateToConflictsTriggers() {
+    await this.conflictsTriggersLink.click();
+  }
+
+  async navigateToESIM() {
+    await this.esimLink.click();
+  }
+
+  async navigateToESIMQuestions() {
+    await this.esimQuestionsLink.click();
+  }
+
+  async navigateToESIMRequests() {
+    await this.esimRequestsLink.click();
+  }
+
+  // Verification methods
+  async isHomeLinkVisible(): Promise<boolean> {
+    return this.homeLink.isVisible();
+  }
+
+  async isRecentLinkVisible(): Promise<boolean> {
+    return this.recentLink.isVisible();
+  }
+
+  async isPinnedLinkVisible(): Promise<boolean> {
+    return this.pinnedLink.isVisible();
+  }
+
+  async isConflictsLinkVisible(): Promise<boolean> {
+    return this.conflictsLink.isVisible();
+  }
+
+  async isDashboardLinkVisible(): Promise<boolean> {
+    return this.dashboardLink.isVisible();
+  }
+
+  async isAccountsLinkVisible(): Promise<boolean> {
+    return this.accountsLink.isVisible();
+  }
+
+  async isConflictsRequestsLinkVisible(): Promise<boolean> {
+    return this.conflictsRequestsLink.isVisible();
+  }
+
+  async isConflictsQuestionsLinkVisible(): Promise<boolean> {
+    return this.conflictsQuestionsLink.isVisible();
+  }
+
+  async isSourceSystemsLinkVisible(): Promise<boolean> {
+    return this.sourceSystemsLink.isVisible();
+  }
+
+  async isConflictsTriggersLinkVisible(): Promise<boolean> {
+    return this.conflictsTriggersLink.isVisible();
+  }
+
+  async isESIMLinkVisible(): Promise<boolean> {
+    return this.esimLink.isVisible();
+  }
+
+  async isESIMQuestionsLinkVisible(): Promise<boolean> {
+    return this.esimQuestionsLink.isVisible();
+  }
+
+  async isESIMRequestsLinkVisible(): Promise<boolean> {
+    return this.esimRequestsLink.isVisible();
+  }
+}
