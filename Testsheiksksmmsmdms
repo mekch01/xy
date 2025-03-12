@@ -1,0 +1,63 @@
+// test.spec.ts
+import { test, expect } from '@playwright/test';
+import { testConfig } from './config'; // Import the configuration
+
+test('Fill out Conflicts Request form', async ({ page }) => {
+  // Navigate to the Conflicts Requests page
+  await page.goto('URL_OF_THE_PAGE');
+
+  // Wait for the title 'Conflicts request active' to be shown
+  await expect(page).toHaveTitle('Conflicts request active', { timeout: 10000 });
+
+  // Function to generate random text
+  const generateRandomText = (length: number) => {
+    const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+    let result = '';
+    const charactersLength = characters.length;
+    for (let i = 0; i < length; i++) {
+      result += characters.charAt(Math.floor(Math.random() * charactersLength));
+    }
+    return result;
+  };
+
+  // Function to fill out fields
+  const fillFormFields = async (page: Page, clearanceType: string, clientName: string, sourceSystem: string, requester: string) => {
+    // Check if fields are enabled
+    await expect(page.locator('text=Project Name')).toBeEnabled();
+    await expect(page.locator('text=Clearance Type')).toBeEnabled();
+    await expect(page.locator('text=Client Name')).toBeEnabled();
+    await expect(page.locator('text=Source System')).toBeEnabled();
+    await expect(page.locator('text=Requester')).toBeEnabled();
+
+    // Set Status to Active
+    await page.click('text=Active');
+
+    // Pre-filled Owner
+    await expect(page.locator('text=Owner')).toHaveText('Menish Chandra(Av)');
+
+    // Fill Project Name with random text of size 8
+    await page.fill('input[name="ProjectName"]', generateRandomText(8));
+
+    // Fill Clearance Type (parameterized)
+    await page.selectOption('select[name="ClearanceType"]', clearanceType);
+
+    // Fill Client Name (parameterized)
+    await page.fill('input[name="ClientName"]', clientName);
+
+    // Fill Source System (parameterized)
+    await page.fill('input[name="SourceSystem"]', sourceSystem);
+
+    // Fill Requester (parameterized)
+    await page.fill('input[name="Requester"]', requester);
+
+    // Fill Request Date with today's date
+    const today = new Date().toISOString().split('T')[0]; // Format as YYYY-MM-DD
+    await page.fill('input[name="RequestDate"]', today);
+
+    // Fill Timing Sensitivities with random text
+    await page.fill('text=Timing Sensitivities', generateRandomText(10));
+  };
+
+  // Call the function with parameterized values from config
+  await fillFormFields(page, testConfig.clearanceType, testConfig.clientName, testConfig.sourceSystem, testConfig.requester);
+});
