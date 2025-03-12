@@ -1,13 +1,5 @@
-const lookupField = page.locator('[data-id="lookup_field_name.fieldControl-LookupResultsDropdown_lookupSearch"]');
-    await lookupField.click();
-
-    // Search and Select Value
-    await lookupField.fill('Search Value');
-    await page.waitForTimeout(1000);
-
-    const option = page.locator('li[role="option"]', { hasText: 'Desired Value' });
-    await option.click();
-
-    // Confirm Selection
-    const selectedValue = await lookupField.inputValue();
-    console.log(`Selected Value: ${selectedValue}`);
+  const today = new Date();
+  const month = String(today.getMonth() + 1).padStart(2, '0'); // MM
+  const day = String(today.getDate()).padStart(2, '0'); // DD
+  const year = today.getFullYear(); // YYYY
+  const formattedDate = `${month}-${day}-${year}`;
