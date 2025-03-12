@@ -1,65 +1,13 @@
+const lookupField = page.locator('[data-id="lookup_field_name.fieldControl-LookupResultsDropdown_lookupSearch"]');
+    await lookupField.click();
 
-const QuestionRenderer: React.FunctionComponent<QuestionRendererProps> = ({ questions, context }) => {
-    const [followUpQuestions, setFollowUpQuestions] = React.useState<any[]>([]);
+    // Search and Select Value
+    await lookupField.fill('Search Value');
+    await page.waitForTimeout(1000);
 
-    const handleResponse = async (question: any, response: string) => {
-        const followUps = await context.webAPI.retrieveMultipleRecords(
-            "conflicts_question",
-            `?$filter=parentquestionid eq ${question.cnflcts_conflictsquestionid} and triggerresponse eq '${response}'`
-        );
-        setFollowUpQuestions(followUps.entities);
-    };
+    const option = page.locator('li[role="option"]', { hasText: 'Desired Value' });
+    await option.click();
 
-    return React.createElement(
-        Stack,
-        { tokens: { childrenGap: 20 } },
-        questions.map((question) =>
-            React.createElement(
-                Stack,
-                { key: question.cnflcts_conflictsquestionid },
-                React.createElement(Label, null, question.cnflcts_questiontext),
-                question.cnflcts_questiontype === "YesNo"
-                    ? React.createElement(ChoiceGroup, {
-                          options: [
-                              { key: "Yes", text: "Yes" },
-                              { key: "No", text: "No" }
-                          ],
-                          onChange: (event, option) => handleResponse(question, option?.key || "")
-                      })
-                    : React.createElement(OptionsControl, { question, context, onChange: handleResponse })
-            )
-        ),
-        followUpQuestions.length > 0 && React.createElement(QuestionRenderer, { questions: followUpQuestions, context: context })
-    );
-};
-
-export default QuestionRenderer; 
-
-// Dropdown control for options
-interface OptionsControlProps {
-    question: any;
-    context: ComponentFramework.Context<IInputs>;
-    onChange: (question: any, response: string) => void;
-}
-
-const OptionsControl: React.FunctionComponent<OptionsControlProps> = ({ question, context, onChange }) => {
-    const [options, setOptions] = React.useState<IDropdownOption[]>([]);
-
-    React.useEffect(() => {
-        const fetchOptions = async () => {
-            const data = await context.webAPI.retrieveMultipleRecords(
-                "conflicts_option",
-                `?$filter=conflictsquestionid eq ${question.cnflcts_conflictsquestionid}`
-            );
-            setOptions(data.entities.map((opt: any) => ({ key: opt.cnflcts_optionid, text: opt.cnflcts_option })));
-        };
-        fetchOptions();
-    }, [context, question]);
-
-
-    return React.createElement(Dropdown, {
-        placeholder: "Select an option",
-        options: options,
-        onChange: (event, option) => onChange(question, option?.key as string)
-    });
-};
+    // Confirm Selection
+    const selectedValue = await lookupField.inputValue();
+    console.log(`Selected Value: ${selectedValue}`);
