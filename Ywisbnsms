@@ -1,0 +1,7 @@
+// config.ts
+export const testConfig = {
+  clearanceType: 'Secret',
+  clientName: 'Client Inc.',
+  sourceSystem: 'System A',
+  requester: 'Requester Name',
+};
