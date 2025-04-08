@@ -25,8 +25,13 @@ export class ServiceViewSidebarPage {
     // Get all menu item elements
     const items = await this.menuItems.all();
     
-    // Extract text content from each menu item
-    return Promise.all(items.map(item => item.textContent()));
+    // Extract text content from each menu item and filter out any null values
+    const textContents = await Promise.all(
+      items.map(item => item.textContent())
+    );
+    
+    // Filter out any null values and return as a string array
+    return textContents.filter(text => text !== null) as string[];
   }
 
   // Click on a specific menu item
