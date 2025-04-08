@@ -1,5 +1,5 @@
 // serviceViewSidebarPage.ts
-import { Page } from '@playwright/test';
+import { Page, Locator } from '@playwright/test';
 
 export class ServiceViewSidebarPage {
   readonly page: Page;
@@ -8,34 +8,45 @@ export class ServiceViewSidebarPage {
 
   constructor(page: Page) {
     this.page = page;
-    this.sidebar = page.locator('.side-nav'); // Adjust selector based on actual HTML
-    this.menuItems = this.sidebar.locator('li'); // Adjust selector based on actual HTML
+    // Use appropriate selectors based on the actual HTML structure
+    this.sidebar = page.locator('div.side-nav'); // Adjust selector as needed
+    this.menuItems = this.sidebar.locator('li'); // Adjust selector as needed
   }
 
   // Get specific menu item by name
-  getMenuItem = (name: string) => 
+  getMenuItem = (name: string): Locator => 
     this.menuItems.filter({ hasText: name });
 
   // Get all menu items
-  async getAllMenuItems() {
+  async getAllMenuItems(): Promise<string[]> {
+    // Wait for the first menu item to be attached to ensure the menu is loaded
+    await this.menuItems.first().waitFor({ state: 'attached' });
+    
+    // Get all menu item elements
     const items = await this.menuItems.all();
-    return items.map(item => item.textContent());
+    
+    // Extract text content from each menu item
+    return Promise.all(items.map(item => item.textContent()));
   }
 
   // Click on a specific menu item
-  async clickMenuItem(name: string) {
-    await this.getMenuItem(name).click();
+  async clickMenuItem(name: string): Promise<void> {
+    const menuItem = this.getMenuItem(name);
+    await menuItem.waitFor({ state: 'attached' });
+    await menuItem.click();
     await this.page.waitForLoadState('domcontentloaded');
   }
 
   // Verify menu item exists
-  async verifyMenuItemExists(name: string) {
-    await this.getMenuItem(name).waitFor({ state: 'attached' });
+  async verifyMenuItemExists(name: string): Promise<boolean> {
+    const menuItem = this.getMenuItem(name);
+    await menuItem.waitFor({ state: 'attached' });
     return true;
   }
 
   // Verify all expected menu items exist
-  async verifyAllMenuItemsExist(expectedItems: string[]) {
+  async verifyAllMenuItemsExist(expectedItems: string[]): Promise<boolean> {
+    await this.menuItems.first().waitFor({ state: 'attached' });
     const actualItems = await this.getAllMenuItems();
     const missingItems = expectedItems.filter(item => !actualItems.includes(item));
     return missingItems.length === 0;
