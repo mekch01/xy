@@ -56,4 +56,12 @@ export class ServiceViewSidebarPage {
     const missingItems = expectedItems.filter(item => !actualItems.includes(item));
     return missingItems.length === 0;
   }
+
+  // Navigate to Service View
+  async navigateToServiceView(url: string): Promise<void> {
+    await this.page.goto(url);
+    await this.page.waitForLoadState('networkidle');
+    // Add additional checks to ensure the page is loaded correctly
+    await expect(this.sidebar).toBeVisible();
+  }
 }
