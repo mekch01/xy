@@ -1,43 +1,39 @@
-import { test, expect } from '@playwright/test';
-import { Dynamics365NavigationPage } from '../pages/Dynamics365NavigationPage';
+// casePage.ts
+import { Page, Locator } from '@playwright/test';
 
-test.describe('Conflicts Requests Page Tests', () => {
-  let navigationPage: Dynamics365NavigationPage;
+export class CasePage {
+  readonly page: Page;
+  readonly newCaseButton: Locator;
+  readonly quickFindInput: Locator;
+  readonly searchButton: Locator;
 
-  test.beforeEach(async ({ page }) => {
-    // Initialize the navigation page object
-    navigationPage = new Dynamics365NavigationPage(page);
+  constructor(page: Page) {
+    this.page = page;
+    // Use appropriate selectors based on the actual HTML structure
+    this.newCaseButton = page.getByRole('button', { name: 'New' }); // Adjust selector as needed
+    this.quickFindInput = page.locator('input.quick-find'); // Adjust selector as needed
+    this.searchButton = page.getByRole('button', { name: 'Search' }); // Adjust selector as needed
+  }
 
-    // Navigate to the Dynamics 365 application (replace with actual URL)
-    await page.goto('https://example.com/dynamics365');
-  });
+  // Click on the "New Case" button
+  async clickNewCase(): Promise<void> {
+    await this.newCaseButton.click();
+    await this.page.waitForLoadState('domcontentloaded');
+  }
 
-  test('Navigate to Conflicts Requests and verify Active Conflicts Requests and New button', async ({ page }) => {
-    // Step 1: Verify the Conflicts Requests link is visible
-    const isConflictsRequestsLinkVisible = await navigationPage.isConflictsRequestsLinkVisible();
-    expect(isConflictsRequestsLinkVisible).toBeTruthy();
-
-    // Step 2: Navigate to the Conflicts Requests page
-    await navigationPage.navigateToConflictsRequests();
-
-    // Step 3: Verify navigation to the Conflicts Requests page (replace with actual URL or page-specific verification)
-    await expect(page).toHaveURL('https://example.com/dynamics365/conflicts-requests');
-    await expect(page).toHaveTitle(/Conflicts Requests/); // Adjust based on the actual page title
-
-    // Step 4: Verify the "Active Conflicts Requests" section is visible
-    const activeConflictsRequestsHeader = page.locator('h1', { hasText: 'Active Conflicts Requests' });
-    await expect(activeConflictsRequestsHeader).toBeVisible();
-
-    // Step 5: Verify the "New" button is present and clickable
-    const newButton = page.locator('button', { hasText: 'New' });
-    await expect(newButton).toBeVisible();
-    await expect(newButton).toBeEnabled();
-
-    // Step 6: Click the "New" button
-    await newButton.click();
-
-    // Step 7: Verify navigation to the "New Conflicts Request" page (replace with actual URL or page-specific verification)
-    await expect(page).toHaveURL('https://example.com/dynamics365/conflicts-requests/new');
-    await expect(page).toHaveTitle(/New Conflicts Request/); // Adjust based on the actual page title
-  });
-});
+  // Fill value in the "Quick Find" input field and search
+  async quickFindAndSearch(value: string): Promise<void> {
+    // Clear the input field if necessary
+    await this.quickFindInput.fill('');
+    
+    // Fill the input field with the provided value
+    await this.quickFindInput.fill(value);
+    
+    // Press Enter to trigger the search or click the search button
+    await this.quickFindInput.press('Enter');
+    // Alternatively, click the search button
+    // await this.searchButton.click();
+    
+    await this.page.waitForLoadState('domcontentloaded');
+  }
+}
