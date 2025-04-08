@@ -1,5 +1,70 @@
-  const today = new Date();
-  const month = String(today.getMonth() + 1).padStart(2, '0'); // MM
-  const day = String(today.getDate()).padStart(2, '0'); // DD
-  const year = today.getFullYear(); // YYYY
-  const formattedDate = `${month}-${day}-${year}`;
+// test/e2eAuthenticationLog.test.ts
+import { test, expect } from '@playwright/test';
+import { ServiceViewSidebarPage } from './serviceViewSidebarPage';
+import { CasePage } from './casePage';
+import { AuthenticationLogPage } from './authenticationLogPage';
+import { NewCasePage } from './newCasePage';
+
+test('End-to-end testing of creating a new authentication log', async ({ page }) => {
+  const sidebar = new ServiceViewSidebarPage(page);
+  const casePage = new CasePage(page);
+  const authLogPage = new AuthenticationLogPage(page);
+  const newCasePage = new NewCasePage(page);
+  const serviceViewUrl = 'YOUR_SERVICEVIEW_URL'; // Replace with your URL
+
+  // Step 1: Navigate to Service View
+  await sidebar.navigateToServiceView(serviceViewUrl);
+
+  // Step 2: Click on the hamburger menu to open the sidebar
+  await sidebar.clickHamburgerMenu();
+
+  // Step 3: Click on the "Cases" menu item
+  await sidebar.clickMenuItem('Cases');
+
+  // Step 4: Verify navigation to the Case page
+  await expect(page).toHaveURL(/.*\/Cases/);
+
+  // Step 5: Click on the "New Case" button
+  await casePage.clickNewCase();
+
+  // Step 6: Verify navigation to the New Case page
+  await expect(page).toHaveTitle(/New Case/);
+  await expect(page).toHaveURL(/.*\/newcase/);
+
+  // Step 7: Fill out the Authentication Log form
+  await authLogPage.fillRequiredFields(
+    'John Doe',
+    'Pending',
+    'This is a test authentication log.'
+  );
+  await authLogPage.fillCategorizationFields(
+    'Test Category',
+    'Test Type',
+    'Test Detail'
+  );
+  await authLogPage.fillAuthenticationFields(
+    'Test Origin',
+    'Test Method',
+    'Test Method 2'
+  );
+
+  // Step 8: Save the form
+  await authLogPage.clickSave();
+
+  // Step 9: Verify successful save and navigation to the case details page
+  await expect(page).toHaveURL(/.*\/cases\/\d+/);
+
+  // Step 10: Navigate back to the New Case page (for demonstration)
+  await casePage.clickNewCase();
+
+  // Step 11: Verify the page title contains "New Case"
+  const isCorrectPage = await newCasePage.verifyPageTitle();
+  expect(isCorrectPage).toBe(true);
+
+  // Step 12: Fetch field values from the New Case page
+  const fieldValues = await newCasePage.fetchFieldValues();
+  console.log('Field Values:', fieldValues);
+
+  // Add more verification steps as needed
+});
+
