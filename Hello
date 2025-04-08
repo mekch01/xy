@@ -1,43 +1,43 @@
-import zeep
+// serviceViewSidebarPage.ts
+import { Page } from '@playwright/test';
 
-# Configuration - Replace these with your actual values
-wsdl_path = 'path/to/enterprise.wsdl'  # Path to your downloaded Enterprise WSDL file
-username = 'your_username'            # e.g., integration@example.com
-password = 'your_password'            # Your integration user's password
-security_token = 'your_security_token' # Your security token from Salesforce
+export class ServiceViewSidebarPage {
+  readonly page: Page;
+  readonly sidebar: Locator;
+  readonly menuItems: Locator;
 
-# Concatenate password and security token as required by Salesforce SOAP API
-password_with_token = password + security_token
+  constructor(page: Page) {
+    this.page = page;
+    this.sidebar = page.locator('.side-nav'); // Adjust selector based on actual HTML
+    this.menuItems = this.sidebar.locator('li'); // Adjust selector based on actual HTML
+  }
 
-# Create a SOAP client using the WSDL
-client = zeep.Client(wsdl=wsdl_path)
+  // Get specific menu item by name
+  getMenuItem = (name: string) => 
+    this.menuItems.filter({ hasText: name });
 
-try:
-    # Step 1: Log in to Salesforce
-    login_result = client.service.login(username, password_with_token)
-    session_id = login_result.sessionId  # Get the session ID
-    server_url = login_result.serverUrl  # Get the instance URL for subsequent calls
+  // Get all menu items
+  async getAllMenuItems() {
+    const items = await this.menuItems.all();
+    return items.map(item => item.textContent());
+  }
 
-    # Step 2: Configure the client with the session ID and server URL
-    client.service._binding_options['address'] = server_url  # Update endpoint to instance URL
-    
-    # Create and set the SessionHeader for authentication
-    SessionHeader = client.get_element('{urn:enterprise.soap.sforce.com}SessionHeader')
-    header = SessionHeader(sessionId=session_id)
-    client.set_default_soapheaders([header])
+  // Click on a specific menu item
+  async clickMenuItem(name: string) {
+    await this.getMenuItem(name).click();
+    await this.page.waitForLoadState('domcontentloaded');
+  }
 
-    # Step 3: Query Salesforce (example: fetch Account records)
-    query_string = "SELECT Id, Name FROM Account"
-    query_result = client.service.query(query_string)
+  // Verify menu item exists
+  async verifyMenuItemExists(name: string) {
+    await this.getMenuItem(name).waitFor({ state: 'attached' });
+    return true;
+  }
 
-    # Step 4: Process and display the results
-    print(f"Retrieved {len(query_result.records)} records:")
-    for record in query_result.records:
-        print(f"ID: {record.Id}, Name: {record.Name}")
-
-except zeep.exceptions.Fault as fault:
-    # Handle SOAP-specific errors (e.g., invalid credentials or query syntax)
-    print(f"SOAP Error: {fault}")
-except Exception as e:
-    # Handle other errors (e.g., network issues)
-    print(f"Error: {e}")
+  // Verify all expected menu items exist
+  async verifyAllMenuItemsExist(expectedItems: string[]) {
+    const actualItems = await this.getAllMenuItems();
+    const missingItems = expectedItems.filter(item => !actualItems.includes(item));
+    return missingItems.length === 0;
+  }
+}
