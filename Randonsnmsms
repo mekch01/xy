@@ -15,10 +15,20 @@ export class CasePage {
     this.searchButton = page.getByRole('button', { name: 'Search' }); // Adjust selector as needed
   }
 
-  // Click on the "New Case" button
+  // Click on the "New Case" button after verifying it's visible
   async clickNewCase(): Promise<void> {
+    // Wait for the "New Case" button to be visible
+    await expect(this.newCaseButton).toBeVisible();
+    
+    // Click on the "New Case" button
     await this.newCaseButton.click();
+    
+    // Wait for the page to load after clicking
     await this.page.waitForLoadState('domcontentloaded');
+    
+    // Verify navigation to the New Case page
+    await expect(this.page).toHaveTitle(/New Case/); // Check for "New Case" in the page title
+    await expect(this.page).toHaveURL(/.*\/newcase/); // Adjust the URL pattern as needed
   }
 
   // Fill value in the "Quick Find" input field and search
