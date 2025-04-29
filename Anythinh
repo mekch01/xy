@@ -1,0 +1,546 @@
+/**
+ * Dynamics CRM Utility Methods Demo
+ * This file demonstrates the usage of all key methods from the CRMUtils library
+ */
+
+// ============================
+// FORM ONLOAD MAIN FUNCTION
+// ============================
+function DemoFormOnLoad(executionContext) {
+    // Get form context
+    const formContext = CRMUtils.Form.getFormContext(executionContext);
+    
+    console.log("Demo form loaded");
+    
+    // Initialize the demo based on form type
+    if (CRMUtils.Form.isCreateForm(formContext)) {
+        console.log("This is a CREATE form");
+        initializeCreateForm(formContext);
+    } else if (CRMUtils.Form.isUpdateForm(formContext)) {
+        console.log("This is an UPDATE form");
+        initializeUpdateForm(formContext);
+    }
+    
+    // Set up field event handlers
+    setupFieldEventHandlers(formContext);
+    
+    // Demo tab and section management
+    demoTabAndSectionManagement(formContext);
+    
+    // Demo option set handling
+    demoOptionSetHandling(formContext);
+    
+    // Setup business process flow
+    setupBusinessProcessFlow(formContext);
+    
+    // Demo notifications and dialog
+    demoNotificationsAndDialogs(formContext);
+}
+
+// ============================
+// CREATE FORM INITIALIZATION
+// ============================
+function initializeCreateForm(formContext) {
+    // Set default values
+    CRMUtils.Field.setValue(formContext, "name", "New Demo Record");
+    
+    // Set a lookup field
+    if (formContext.getAttribute("ownerid")) {
+        const currentUserId = Xrm.Utility.getGlobalContext().userSettings.userId;
+        const currentUserName = Xrm.Utility.getGlobalContext().userSettings.userName;
+        CRMUtils.Field.setLookup(formContext, "ownerid", currentUserId, currentUserName, "systemuser");
+    }
+    
+    // Set date fields
+    if (formContext.getAttribute("createdon")) {
+        const today = new Date();
+        CRMUtils.Field.setValue(formContext, "createdon", today);
+        
+        // Demo date manipulation
+        const dueDate = CRMUtils.DateTime.addDays(today, 30);
+        if (formContext.getAttribute("new_duedate")) {
+            CRMUtils.Field.setValue(formContext, "new_duedate", dueDate);
+        }
+    }
+    
+    // Make some fields required
+    CRMUtils.Field.setRequired(formContext, "name", true);
+    
+    // Show fields specific to create mode
+    if (formContext.getControl("new_setupcompleted")) {
+        CRMUtils.Field.setVisible(formContext, "new_setupcompleted", true);
+        CRMUtils.Field.setValue(formContext, "new_setupcompleted", false);
+    }
+}
+
+// ============================
+// UPDATE FORM INITIALIZATION
+// ============================
+function initializeUpdateForm(formContext) {
+    // Get the record ID
+    const recordId = formContext.data.entity.getId();
+    console.log("Current record ID:", recordId);
+    
+    // Load related data using WebAPI
+    loadRelatedRecords(formContext, recordId);
+    
+    // Enable fields specific to update mode
+    if (formContext.getControl("statuscode")) {
+        CRMUtils.Field.setEnabled(formContext, "statuscode", true);
+    }
+    
+    // Show tabs specific to update mode
+    CRMUtils.Navigation.setTabVisibility(formContext, "tab_history", true);
+    CRMUtils.Navigation.setTabExpanded(formContext, "tab_history", false); // Collapsed initially
+}
+
+// ============================
+// FIELD EVENT HANDLERS SETUP
+// ============================
+function setupFieldEventHandlers(formContext) {
+    // Add onChange handlers for key fields
+    if (formContext.getAttribute("name")) {
+        CRMUtils.Events.addHandler(formContext, "name", "change", onNameChange);
+    }
+    
+    if (formContext.getAttribute("statuscode")) {
+        CRMUtils.Events.addHandler(formContext, "statuscode", "change", onStatusChange);
+    }
+    
+    if (formContext.getAttribute("customerid")) {
+        CRMUtils.Events.addHandler(formContext, "customerid", "change", onCustomerChange);
+    }
+    
+    // Example of using the onChange factory
+    if (formContext.getAttribute("description")) {
+        const descriptionChangeHandler = CRMUtils.Events.onChange("description", function(formContext, value) {
+            console.log("Description changed to:", value);
+            // Update character count field if it exists
+            if (formContext.getAttribute("new_descriptionlength")) {
+                const charCount = value ? value.length : 0;
+                CRMUtils.Field.setValue(formContext, "new_descriptionlength", charCount);
+            }
+        });
+        
+        CRMUtils.Events.addHandler(formContext, "description", "change", descriptionChangeHandler);
+    }
+}
+
+// ============================
+// NAME FIELD CHANGE HANDLER
+// ============================
+function onNameChange(executionContext) {
+    const formContext = CRMUtils.Form.getFormContext(executionContext);
+    const nameValue = CRMUtils.Field.getValue(formContext, "name");
+    
+    // Example of field validation with notifications
+    if (nameValue && nameValue.length < 5) {
+        CRMUtils.Field.setNotification(formContext, "name", "Name should be at least 5 characters long", "WARNING");
+    } else {
+        CRMUtils.Field.clearNotification(formContext, "name");
+    }
+    
+    // Update other fields based on name
+    if (formContext.getAttribute("new_shortname") && nameValue) {
+        const shortName = nameValue.substring(0, 10) + (nameValue.length > 10 ? "..." : "");
+        CRMUtils.Field.setValue(formContext, "new_shortname", shortName);
+    }
+}
+
+// ============================
+// STATUS FIELD CHANGE HANDLER
+// ============================
+function onStatusChange(executionContext) {
+    const formContext = CRMUtils.Form.getFormContext(executionContext);
+    const statusValue = CRMUtils.Field.getValue(formContext, "statuscode");
+    const statusText = CRMUtils.OptionSet.getText(formContext, "statuscode");
+    
+    console.log(`Status changed to: ${statusText} (${statusValue})`);
+    
+    // Show/hide fields based on status
+    if (statusValue === 1) { // Active
+        CRMUtils.Field.setEnabled(formContext, "prioritycode", true);
+        CRMUtils.Field.setRequired(formContext, "prioritycode", true);
+        
+        // Show a section
+        CRMUtils.Navigation.setSectionVisibility(formContext, "tab_details", "section_priority", true);
+    } else {
+        CRMUtils.Field.setEnabled(formContext, "prioritycode", false);
+        CRMUtils.Field.setRequired(formContext, "prioritycode", false);
+        
+        // Hide a section
+        CRMUtils.Navigation.setSectionVisibility(formContext, "tab_details", "section_priority", false);
+    }
+    
+    // Move the BPF stage based on status
+    if (statusValue === 2) { // Completed
+        CRMUtils.BPF.moveToNextStage(formContext);
+    }
+}
+
+// ============================
+// CUSTOMER FIELD CHANGE HANDLER
+// ============================
+function onCustomerChange(executionContext) {
+    const formContext = CRMUtils.Form.getFormContext(executionContext);
+    const customer = CRMUtils.Field.getValue(formContext, "customerid");
+    
+    if (customer && customer.length > 0) {
+        const customerId = customer[0].id;
+        const customerName = customer[0].name;
+        const customerType = customer[0].entityType;
+        
+        console.log(`Selected customer: ${customerName} (${customerType}, ID: ${customerId})`);
+        
+        // Example of retrieving related data
+        if (customerType === "account") {
+            CRMUtils.WebAPI.retrieveRecord("account", customerId, "accountnumber,creditlimit")
+                .then(function(result) {
+                    console.log("Retrieved account data:", result);
+                    
+                    // Update fields based on account data
+                    if (formContext.getAttribute("new_accountnumber")) {
+                        CRMUtils.Field.setValue(formContext, "new_accountnumber", result.accountnumber);
+                    }
+                    
+                    if (formContext.getAttribute("new_creditlimit")) {
+                        CRMUtils.Field.setValue(formContext, "new_creditlimit", result.creditlimit);
+                    }
+                })
+                .catch(function(error) {
+                    console.error("Error retrieving account:", error);
+                });
+        }
+    } else {
+        // Clear related fields if customer is removed
+        if (formContext.getAttribute("new_accountnumber")) {
+            CRMUtils.Field.setValue(formContext, "new_accountnumber", null);
+        }
+        
+        if (formContext.getAttribute("new_creditlimit")) {
+            CRMUtils.Field.setValue(formContext, "new_creditlimit", null);
+        }
+    }
+}
+
+// ============================
+// TAB AND SECTION MANAGEMENT
+// ============================
+function demoTabAndSectionManagement(formContext) {
+    // Tab manipulation
+    if (formContext.ui.tabs.get("tab_details")) {
+        // Ensure details tab is visible and expanded
+        CRMUtils.Navigation.setTabVisibility(formContext, "tab_details", true);
+        CRMUtils.Navigation.setTabExpanded(formContext, "tab_details", true);
+        
+        // Give focus to the details tab
+        CRMUtils.Navigation.navigateToTab(formContext, "tab_details");
+    }
+    
+    // Section manipulation inside tabs
+    if (formContext.ui.tabs.get("tab_details") && 
+        formContext.ui.tabs.get("tab_details").sections.get("section_general")) {
+        
+        // Show the general section
+        CRMUtils.Navigation.setSectionVisibility(formContext, "tab_details", "section_general", true);
+    }
+    
+    // Show/hide sections based on business logic
+    const priority = CRMUtils.Field.getValue(formContext, "prioritycode");
+    if (priority && priority === 1) { // High priority
+        CRMUtils.Navigation.setSectionVisibility(formContext, "tab_details", "section_escalation", true);
+    } else {
+        CRMUtils.Navigation.setSectionVisibility(formContext, "tab_details", "section_escalation", false);
+    }
+}
+
+// ============================
+// OPTION SET HANDLING
+// ============================
+function demoOptionSetHandling(formContext) {
+    if (formContext.getAttribute("prioritycode")) {
+        // Get all options
+        const priorityOptions = CRMUtils.OptionSet.getOptions(formContext, "prioritycode");
+        console.log("Available priority options:", priorityOptions);
+        
+        // Get selected text
+        const priorityText = CRMUtils.OptionSet.getText(formContext, "prioritycode");
+        console.log("Selected priority:", priorityText);
+        
+        // Add a custom option if it doesn't exist
+        // Note: This will only work if the option set is configured to allow customization
+        try {
+            CRMUtils.OptionSet.addOption(formContext, "prioritycode", 999, "Custom Priority");
+            console.log("Added custom priority option");
+        } catch (e) {
+            console.log("Cannot add custom option (expected in some cases):", e.message);
+        }
+        
+        // Set value by number
+        // CRMUtils.OptionSet.setValue(formContext, "prioritycode", 1); // Set to High priority
+    }
+}
+
+// ============================
+// BUSINESS PROCESS FLOW SETUP
+// ============================
+function setupBusinessProcessFlow(formContext) {
+    try {
+        // Get active process and stage info
+        const processId = CRMUtils.BPF.getActiveProcessInstanceId(formContext);
+        const stageId = CRMUtils.BPF.getActiveStageId(formContext);
+        
+        console.log("Active BPF Process ID:", processId);
+        console.log("Active BPF Stage ID:", stageId);
+        
+        // Example of moving between stages
+        // Generally we would move stages based on business logic
+        const statusValue = CRMUtils.Field.getValue(formContext, "statuscode");
+        
+        if (statusValue === 2) { // Completed
+            // Example of moving to next stage
+            // CRMUtils.BPF.moveToNextStage(formContext);
+        }
+    } catch (e) {
+        console.log("BPF operations not available on this form:", e.message);
+    }
+}
+
+// ============================
+// LOAD RELATED RECORDS
+// ============================
+function loadRelatedRecords(formContext, recordId) {
+    // Example for retrieving related activities
+    const fetchXml = `
+        <fetch>
+            <entity name="activitypointer">
+                <attribute name="subject" />
+                <attribute name="statecode" />
+                <attribute name="scheduledend" />
+                <attribute name="activitytypecode" />
+                <filter>
+                    <condition attribute="regardingobjectid" operator="eq" value="${recordId}" />
+                </filter>
+                <order attribute="scheduledend" descending="true" />
+                <link-entity name="systemuser" from="systemuserid" to="ownerid">
+                    <attribute name="fullname" alias="ownername" />
+                </link-entity>
+            </entity>
+        </fetch>
+    `;
+    
+    CRMUtils.WebAPI.executeFetchXml("activitypointer", fetchXml)
+        .then(function(results) {
+            console.log("Related activities:", results.entities);
+            // Update some field with the count
+            if (formContext.getAttribute("new_activitycount")) {
+                CRMUtils.Field.setValue(formContext, "new_activitycount", results.entities.length);
+            }
+            
+            // Example of creating a grid of activities (simplified)
+            if (results.entities.length > 0 && formContext.ui.tabs.get("tab_history")) {
+                console.log(`Found ${results.entities.length} related activities`);
+            }
+        })
+        .catch(function(error) {
+            console.error("Error retrieving activities:", error);
+        });
+}
+
+// ============================
+// NOTIFICATIONS AND DIALOGS
+// ============================
+function demoNotificationsAndDialogs(formContext) {
+    // Demo field notification
+    if (formContext.getAttribute("description") && !CRMUtils.Field.getValue(formContext, "description")) {
+        CRMUtils.Field.setNotification(formContext, "description", "Please provide a detailed description", "INFO");
+        
+        // Clear the notification after 5 seconds
+        setTimeout(function() {
+            CRMUtils.Field.clearNotification(formContext, "description");
+        }, 5000);
+    }
+    
+    // We generally don't want to show dialogs on form load, but here's how to use them:
+    /*
+    CRMUtils.Utility.showNotification("Demo form loaded successfully", "INFO", "Demo");
+    
+    CRMUtils.Utility.showConfirmDialog("Would you like to see more demos?", "Demo Options")
+        .then(function(result) {
+            if (result.confirmed) {
+                console.log("User wants to see more demos");
+            } else {
+                console.log("User does not want to see more demos");
+            }
+        });
+    */
+}
+
+// ============================
+// SAVE HANDLER
+// ============================
+function DemoFormOnSave(executionContext) {
+    const formContext = CRMUtils.Form.getFormContext(executionContext);
+    console.log("Form is being saved");
+    
+    // Example of pre-save validation
+    const name = CRMUtils.Field.getValue(formContext, "name");
+    if (!name || name.trim().length < 3) {
+        // Show an alert and prevent save
+        CRMUtils.Utility.showNotification("Name must be at least 3 characters", "ERROR", "Validation Error");
+        executionContext.getEventArgs().preventDefault();
+        return;
+    }
+    
+    // Example of formatting data before save
+    if (formContext.getAttribute("name")) {
+        // Format name to proper case
+        const formattedName = name.trim();
+        CRMUtils.Field.setValue(formContext, "name", formattedName);
+    }
+    
+    // Example of setting the current date
+    if (formContext.getAttribute("new_lastmodifiedon")) {
+        CRMUtils.Field.setValue(formContext, "new_lastmodifiedon", new Date());
+    }
+}
+
+// ============================
+// SUBGRID DEMO
+// ============================
+function demoSubgrid(formContext, subgridName) {
+    if (!formContext.getControl(subgridName)) {
+        console.log(`Subgrid ${subgridName} not found`);
+        return;
+    }
+    
+    // Refresh the subgrid
+    CRMUtils.Subgrid.refresh(formContext, subgridName);
+    
+    // Get selected records
+    const selectedRecords = CRMUtils.Subgrid.getSelectedRecords(formContext, subgridName);
+    console.log(`Selected ${selectedRecords.length} records from ${subgridName}`);
+    
+    // Process first selected record
+    const firstRecord = CRMUtils.Subgrid.getFirstSelectedRecord(formContext, subgridName);
+    if (firstRecord) {
+        console.log("First selected record ID:", firstRecord.getId());
+        console.log("First selected record entity:", firstRecord.getEntityName());
+    }
+}
+
+// ============================
+// RIBBON BUTTON COMMANDS
+// ============================
+
+/**
+ * Example ribbon button handler for refreshing
+ * @param {any} primaryControl - The form context from ribbon
+ */
+function RefreshDemo(primaryControl) {
+    const formContext = primaryControl;
+    
+    // Show a confirmation
+    CRMUtils.Utility.showConfirmDialog("Are you sure you want to refresh the data?", "Confirm Refresh")
+        .then(function(result) {
+            if (result.confirmed) {
+                // Reload the form data
+                formContext.data.refresh(true).then(function() {
+                    CRMUtils.Utility.showNotification("Data refreshed successfully", "SUCCESS", "Refresh Complete");
+                });
+            }
+        });
+}
+
+/**
+ * Example ribbon button handler for creating a related record
+ * @param {any} primaryControl - The form context from ribbon
+ */
+function CreateRelatedRecord(primaryControl) {
+    const formContext = primaryControl;
+    const recordId = formContext.data.entity.getId();
+    const recordType = formContext.data.entity.getEntityName();
+    
+    // Example of creating a related note
+    const noteData = {
+        "subject": "Auto-generated note",
+        "notetext": "This note was created using the CRMUtils library demo.",
+        "objectid_" + recordType: recordId,
+        "objecttypecode": recordType
+    };
+    
+    CRMUtils.WebAPI.createRecord("annotation", noteData)
+        .then(function(result) {
+            console.log("Created note with ID: " + result.id);
+            CRMUtils.Utility.showNotification("Note created successfully", "SUCCESS", "Success");
+            
+            // Refresh the notes subgrid if it exists
+            if (formContext.getControl("notescontrol")) {
+                CRMUtils.Subgrid.refresh(formContext, "notescontrol");
+            }
+        })
+        .catch(function(error) {
+            console.error("Error creating note:", error);
+            CRMUtils.Utility.showNotification("Error creating note: " + error.message, "ERROR", "Error");
+        });
+}
+
+/**
+ * Example ribbon button handler for changing status
+ * @param {any} primaryControl - The form context from ribbon
+ */
+function SetStatusComplete(primaryControl) {
+    const formContext = primaryControl;
+    
+    // Example of updating status
+    CRMUtils.Field.setValue(formContext, "statuscode", 2); // Complete status
+    
+    // Save the record
+    formContext.data.save().then(function() {
+        // Move BPF to next stage
+        CRMUtils.BPF.moveToNextStage(formContext);
+        CRMUtils.Utility.showNotification("Status updated to Complete", "SUCCESS", "Status Update");
+    });
+}
+
+/**
+ * Example of opening a lookup dialog
+ * @param {any} primaryControl - The form context from ribbon
+ */
+function OpenCustomerLookup(primaryControl) {
+    const formContext = primaryControl;
+    
+    const lookupOptions = {
+        entityTypes: ["account", "contact"],
+        allowMultiSelect: false,
+        defaultEntityType: "account",
+        defaultViewId: "00000000-0000-0000-00AA-000010001001", // Active Accounts view
+        viewIds: ["00000000-0000-0000-00AA-000010001001"]
+    };
+    
+    CRMUtils.Utility.openLookup(lookupOptions)
+        .then(function(results) {
+            if (results && results.length > 0) {
+                const selected = results[0];
+                console.log("Selected: ", selected);
+                
+                // Example of setting a lookup field
+                CRMUtils.Field.setLookup(
+                    formContext, 
+                    "customerid", 
+                    selected.id, 
+                    selected.name, 
+                    selected.entityType
+                );
+            }
+        });
+}
+
+// Export all functions for use in Dynamics CRM
+// These would be referenced in form event handlers and ribbon commands
+window.DemoFormOnLoad = DemoFormOnLoad;
+window.DemoFormOnSave = DemoFormOnSave;
+window.RefreshDemo = RefreshDemo;
+window.CreateRelatedRecord = CreateRelatedRecord;
+window.SetStatusComplete = SetStatusComplete;
+window.OpenCustomerLookup = OpenCustomerLookup;
