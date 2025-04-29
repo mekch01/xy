@@ -1,0 +1,8 @@
+// Single field
+setFieldVisible(executionContext, "telephone1", true);
+
+// Multiple fields
+setFieldVisible(executionContext, ["firstname", "lastname"], false);
+
+// Set multiple values
+setFieldValue(executionContext, ["firstname", "lastname"], ["Erick", "Sams"]);
