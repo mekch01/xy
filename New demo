@@ -1,4 +1,4 @@
-// Single field
+Single field
 setFieldVisible(executionContext, "telephone1", true);
 
 // Multiple fields
@@ -6,3 +6,63 @@ setFieldVisible(executionContext, ["firstname", "lastname"], false);
 
 // Set multiple values
 setFieldValue(executionContext, ["firstname", "lastname"], ["Erick", "Sams"]);
+
+
+
+
+// crmDemoScript.js
+
+function onFormLoad(executionContext) {
+    // Required fields
+    setFieldRequired(executionContext, ["firstname", "lastname"], "required");
+
+    // Autofill email & phone if missing
+    const [email, phone] = getFieldValue(executionContext, ["emailaddress1", "telephone1"]);
+    if (!email) setFieldValue(executionContext, "emailaddress1", "demo@example.com");
+    if (!phone) setFieldValue(executionContext, "telephone1", "9999999999");
+
+    // Show and disable fields
+    setFieldVisible(executionContext, ["telephone1", "emailaddress1"], true);
+    setFieldDisabled(executionContext, ["telephone1", "emailaddress1"], true);
+
+    // Set focus
+    setFocus(executionContext, "firstname");
+
+    // Show form notification
+    showFormNotification(
+        executionContext,
+        "Welcome! Fields have been auto-filled and made required.",
+        "INFO",
+        "demoWelcome"
+    );
+}
+
+function onFirstNameChange(executionContext) {
+    const [firstName] = getFieldValue(executionContext, "firstname");
+
+    if (firstName) {
+        showFormNotification(
+            executionContext,
+            `Nice name, ${firstName}!`,
+            "INFO",
+            "nameGreeting"
+        );
+    } else {
+        clearFormNotification(executionContext, "nameGreeting");
+    }
+}
+
+// Call this from a ribbon button or custom event to demo dialogs
+function showNotificationDialogs() {
+    // Alert example
+    showAlert("This is a custom alert from crmDemoScript.js");
+
+    // Confirmation dialog example
+    showConfirm("Do you like this demo?").then(result => {
+        if (result.confirmed) {
+            Xrm.Navigation.openAlertDialog({ text: "Thanks for confirming!" });
+        } else {
+            Xrm.Navigation.openAlertDialog({ text: "No worries, try again!" });
+        }
+    });
+}
