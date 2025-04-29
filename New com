@@ -1,0 +1,128 @@
+// crmCommonMethods.js
+
+function toArray(input) {
+    return Array.isArray(input) ? input : [input];
+}
+
+// ========== FIELD VALUE METHODS ==========
+function getFieldValue(executionContext, fieldNames) {
+    const formContext = executionContext.getFormContext();
+    return toArray(fieldNames).map(field => formContext.getAttribute(field)?.getValue());
+}
+
+function setFieldValue(executionContext, fieldNames, values) {
+    const formContext = executionContext.getFormContext();
+    const fields = toArray(fieldNames);
+    const vals = toArray(values);
+
+    fields.forEach((field, i) => {
+        const value = vals.length === 1 ? vals[0] : vals[i];
+        const attr = formContext.getAttribute(field);
+        if (attr) {
+            attr.setValue(value);
+            attr.setSubmitMode("always");
+        }
+    });
+}
+
+// ========== VISIBILITY & ENABLE/DISABLE ==========
+function setFieldVisible(executionContext, fieldNames, isVisible) {
+    const formContext = executionContext.getFormContext();
+    toArray(fieldNames).forEach(field => {
+        formContext.getControl(field)?.setVisible(isVisible);
+    });
+}
+
+function setFieldDisabled(executionContext, fieldNames, isDisabled) {
+    const formContext = executionContext.getFormContext();
+    toArray(fieldNames).forEach(field => {
+        formContext.getControl(field)?.setDisabled(isDisabled);
+    });
+}
+
+// ========== REQUIRED LEVEL ==========
+function setFieldRequired(executionContext, fieldNames, level) {
+    const formContext = executionContext.getFormContext();
+    toArray(fieldNames).forEach(field => {
+        formContext.getAttribute(field)?.setRequiredLevel(level);
+    });
+}
+
+// ========== FORM NOTIFICATION ==========
+function showFormNotification(executionContext, message, level = "INFO", uniqueId = "msg") {
+    executionContext.getFormContext().ui.setFormNotification(message, level, uniqueId);
+}
+
+function clearFormNotification(executionContext, uniqueId = "msg") {
+    executionContext.getFormContext().ui.clearFormNotification(uniqueId);
+}
+
+// ========== LOOKUP FIELDS ==========
+function getLookupValue(executionContext, fieldName) {
+    const value = executionContext.getFormContext().getAttribute(fieldName)?.getValue();
+    return value?.[0] || null;
+}
+
+function setLookupValue(executionContext, fieldName, id, name, entityType) {
+    const lookupValue = [{
+        id: id.replace("{", "").replace("}", ""),
+        name: name,
+        entityType: entityType
+    }];
+    executionContext.getFormContext().getAttribute(fieldName).setValue(lookupValue);
+}
+
+// ========== FORM CONTROL ==========
+function getFormType(executionContext) {
+    return executionContext.getFormContext().ui.getFormType();
+}
+
+function getFormContext(executionContext) {
+    return executionContext.getFormContext();
+}
+
+// ========== WEB API CALLS ==========
+function createRecord(entityLogicalName, data) {
+    return Xrm.WebApi.createRecord(entityLogicalName, data);
+}
+
+function retrieveRecord(entityLogicalName, id, select = "") {
+    return Xrm.WebApi.retrieveRecord(entityLogicalName, id, `?$select=${select}`);
+}
+
+function updateRecord(entityLogicalName, id, data) {
+    return Xrm.WebApi.updateRecord(entityLogicalName, id, data);
+}
+
+function deleteRecord(entityLogicalName, id) {
+    return Xrm.WebApi.deleteRecord(entityLogicalName, id);
+}
+
+function retrieveMultipleRecords(entityLogicalName, fetchXml) {
+    return Xrm.WebApi.retrieveMultipleRecords(entityLogicalName, fetchXml);
+}
+
+// ========== UTILITIES ==========
+function openEntityForm(entityName, id, parameters = {}) {
+    Xrm.Navigation.openForm({
+        entityName: entityName,
+        entityId: id,
+        ...parameters
+    });
+}
+
+function openWebResource(name, data = null) {
+    Xrm.Navigation.openWebResource(name, data);
+}
+
+function showAlert(message) {
+    Xrm.Navigation.openAlertDialog({ text: message });
+}
+
+function showConfirm(message) {
+    return Xrm.Navigation.openConfirmDialog({ text: message });
+}
+
+function setFocus(executionContext, fieldName) {
+    executionContext.getFormContext().getControl(fieldName)?.setFocus();
+}
