@@ -1,887 +1,213 @@
 /**
- * Dynamics CRM Utility Methods Library
- * A collection of commonly used methods for Microsoft Dynamics CRM/Dynamics 365 development
+ * CRMUtils module:  Utility methods for Dynamics CRM client-side scripting.
+ * @namespace CRMUtils
  */
+const CRMUtils = (() => {
+  'use strict';
 
-/**
- * Global namespace for CRM utility functions
- */
-var CRMUtils = CRMUtils || {};
+  /**
+   * Normalize input to array
+   * @param {*} input - Single value or array
+   * @returns {Array}
+   */
+  function toArray(input) {
+    return Array.isArray(input) ? input : [input];
+  }
 
-/**
- * ============================
- * FORM CONTEXT HELPER METHODS
- * ============================
- */
-CRMUtils.Form = {
-    /**
-     * Gets the form context from the executionContext
-     * @param {object} executionContext - The execution context passed by the form event
-     * @returns {object} - Form context object
-     */
-    getFormContext: function(executionContext) {
-        return executionContext && executionContext.getFormContext ? executionContext.getFormContext() : null;
-    },
+  /**
+   * Retrieve values of one or more fields
+   * @param {Xrm.ExecutionContext<any, any>} context - Execution context
+   * @param {string|string[]} fieldNames - Logical name(s) of field(s)
+   * @returns {any[]} Array of field values
+   */
+  function getFieldValue(context, fieldNames) {
+    const formCtx = context.getFormContext();
+    return toArray(fieldNames).map(name => {
+      const attr = formCtx.getAttribute(name);
+      if (!attr) console.error(`getFieldValue: Field '${name}' not found.`);
+      return attr ? attr.getValue() : null;
+    });
+  }
 
-    /**
-     * Gets an attribute from the form
-     * @param {object} formContext - The form context
-     * @param {string} attributeName - The logical name of the attribute
-     * @returns {object} - The attribute object or null if not found
-     */
-    getAttribute: function(formContext, attributeName) {
-        return formContext && formContext.getAttribute ? formContext.getAttribute(attributeName) : null;
-    },
-
-    /**
-     * Gets a control from the form
-     * @param {object} formContext - The form context
-     * @param {string} controlName - The name of the control
-     * @returns {object} - The control object or null if not found
-     */
-    getControl: function(formContext, controlName) {
-        return formContext && formContext.getControl ? formContext.getControl(controlName) : null;
-    },
-
-    /**
-     * Gets the current form type (Create:1, Update:2, ReadOnly:3, Disabled:4, QuickCreate:5, BulkEdit:6)
-     * @param {object} formContext - The form context
-     * @returns {number} - The form type
-     */
-    getFormType: function(formContext) {
-        return formContext && formContext.ui ? formContext.ui.getFormType() : null;
-    },
-
-    /**
-     * Checks if the form is in create mode
-     * @param {object} formContext - The form context
-     * @returns {boolean} - True if in create mode
-     */
-    isCreateForm: function(formContext) {
-        return this.getFormType(formContext) === 1;
-    },
-
-    /**
-     * Checks if the form is in update mode
-     * @param {object} formContext - The form context
-     * @returns {boolean} - True if in update mode
-     */
-    isUpdateForm: function(formContext) {
-        return this.getFormType(formContext) === 2;
+  /**
+   * Set value(s) for one or more fields
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string|string[]} fieldNames
+   * @param {*|*[]} values
+   */
+  function setFieldValue(context, fieldNames, values) {
+    if (values === undefined) {
+      console.error("setFieldValue: 'values' parameter is required.");
+      return;
     }
-};
+    const formCtx = context.getFormContext();
+    const names = toArray(fieldNames);
+    const vals = toArray(values);
 
-/**
- * ============================
- * FIELD MANIPULATION METHODS
- * ============================
- */
-CRMUtils.Field = {
-    /**
-     * Gets the value of a field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @returns {any} - The field value or null if not found
-     */
-    getValue: function(formContext, fieldName) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        return attribute ? attribute.getValue() : null;
-    },
-
-    /**
-     * Sets the value of a field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {any} value - The value to set
-     * @returns {boolean} - Success or failure
-     */
-    setValue: function(formContext, fieldName, value) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute) {
-            attribute.setValue(value);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Sets a field as required
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {boolean} isRequired - Whether the field should be required
-     */
-    setRequired: function(formContext, fieldName, isRequired) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute) {
-            attribute.setRequiredLevel(isRequired ? "required" : "none");
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Shows or hides a field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {boolean} visible - Whether the field should be visible
-     */
-    setVisible: function(formContext, fieldName, visible) {
-        const control = CRMUtils.Form.getControl(formContext, fieldName);
-        if (control) {
-            control.setVisible(visible);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Enables or disables a field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {boolean} enabled - Whether the field should be enabled
-     */
-    setEnabled: function(formContext, fieldName, enabled) {
-        const control = CRMUtils.Form.getControl(formContext, fieldName);
-        if (control) {
-            control.setDisabled(!enabled);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Clears the value of a lookup field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     */
-    clearLookup: function(formContext, fieldName) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute && attribute.getAttributeType() === "lookup") {
-            attribute.setValue(null);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Sets a lookup field value
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {string} id - The GUID of the lookup entity
-     * @param {string} name - The name of the lookup entity
-     * @param {string} entityType - The entity type of the lookup
-     */
-    setLookup: function(formContext, fieldName, id, name, entityType) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute && attribute.getAttributeType() === "lookup") {
-            const lookupValue = [{
-                id: id,
-                name: name,
-                entityType: entityType
-            }];
-            attribute.setValue(lookupValue);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Sets a field notification
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {string} message - The notification message
-     * @param {string} level - The notification level (ERROR, WARNING, INFO)
-     */
-    setNotification: function(formContext, fieldName, message, level = "ERROR") {
-        const control = CRMUtils.Form.getControl(formContext, fieldName);
-        if (control) {
-            control.setNotification(message, level);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Clears a field notification
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     */
-    clearNotification: function(formContext, fieldName) {
-        const control = CRMUtils.Form.getControl(formContext, fieldName);
-        if (control) {
-            control.clearNotification();
-            return true;
-        }
-        return false;
+    if (vals.length != names.length) {
+      console.error(
+        `setFieldValue: provided values count (${vals.length}) doesn't equal to fields count (${names.length}).`
+      );
     }
-};
 
-/**
- * ============================
- * TAB AND SECTION METHODS
- * ============================
- */
-CRMUtils.Navigation = {
-    /**
-     * Shows or hides a tab
-     * @param {object} formContext - The form context
-     * @param {string} tabName - The name of the tab
-     * @param {boolean} visible - Whether the tab should be visible
-     */
-    setTabVisibility: function(formContext, tabName, visible) {
-        const tab = formContext.ui.tabs.get(tabName);
-        if (tab) {
-            tab.setVisible(visible);
-            return true;
-        }
-        return false;
-    },
+    names.forEach((name, idx) => {
+      const attr = formCtx.getAttribute(name);
+      if (!attr) return console.error(`setFieldValue: Field '${name}' not found.`);
+      const value =  vals[idx];
+      attr.setValue(value);
+      attr.setSubmitMode('always');
+    });
+  }
 
-    /**
-     * Shows or hides a section
-     * @param {object} formContext - The form context
-     * @param {string} tabName - The name of the tab
-     * @param {string} sectionName - The name of the section
-     * @param {boolean} visible - Whether the section should be visible
-     */
-    setSectionVisibility: function(formContext, tabName, sectionName, visible) {
-        const tab = formContext.ui.tabs.get(tabName);
-        if (tab) {
-            const section = tab.sections.get(sectionName);
-            if (section) {
-                section.setVisible(visible);
-                return true;
-            }
-        }
-        return false;
-    },
-
-    /**
-     * Sets a tab's display state (expanded or collapsed)
-     * @param {object} formContext - The form context
-     * @param {string} tabName - The name of the tab
-     * @param {boolean} expanded - Whether the tab should be expanded
-     */
-    setTabExpanded: function(formContext, tabName, expanded) {
-        const tab = formContext.ui.tabs.get(tabName);
-        if (tab) {
-            tab.setDisplayState(expanded ? "expanded" : "collapsed");
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Navigates to a specific tab
-     * @param {object} formContext - The form context
-     * @param {string} tabName - The name of the tab
-     */
-    navigateToTab: function(formContext, tabName) {
-        const tab = formContext.ui.tabs.get(tabName);
-        if (tab) {
-            tab.setFocus();
-            return true;
-        }
-        return false;
+  /**
+   * Show or hide control(s)
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string|string[]} controlNames
+   * @param {boolean} isVisible
+   */
+  function setFieldVisible(context, controlNames, isVisible) {
+    if (typeof isVisible !== 'boolean') {
+      console.error("setFieldVisible: 'isVisible' must be boolean.");
+      return;
     }
-};
+    const formCtx = context.getFormContext();
+    toArray(controlNames).forEach(name => {
+      const ctrl = formCtx.getControl(name);
+      if (!ctrl) return console.error(`setFieldVisible: Control '${name}' not found.`);
+      ctrl.setVisible(isVisible);
+    });
+  }
 
-/**
- * ============================
- * WEBAPI OPERATIONS
- * ============================
- */
-CRMUtils.WebAPI = {
-    /**
-     * Retrieves a record by ID
-     * @param {string} entityName - The logical name of the entity
-     * @param {string} id - The GUID of the record
-     * @param {string} columns - Comma-separated list of columns to retrieve
-     * @returns {Promise} - Promise resolving to the retrieved record
-     */
-    retrieveRecord: function(entityName, id, columns) {
-        return Xrm.WebApi.retrieveRecord(entityName, id, columns ? { select: columns } : null);
-    },
-
-    /**
-     * Creates a new record
-     * @param {string} entityName - The logical name of the entity
-     * @param {object} data - The data object to create the record with
-     * @returns {Promise} - Promise resolving to the created record
-     */
-    createRecord: function(entityName, data) {
-        return Xrm.WebApi.createRecord(entityName, data);
-    },
-
-    /**
-     * Updates an existing record
-     * @param {string} entityName - The logical name of the entity
-     * @param {string} id - The GUID of the record
-     * @param {object} data - The data object with field updates
-     * @returns {Promise} - Promise resolving to the updated record
-     */
-    updateRecord: function(entityName, id, data) {
-        return Xrm.WebApi.updateRecord(entityName, id, data);
-    },
-
-    /**
-     * Deletes a record
-     * @param {string} entityName - The logical name of the entity
-     * @param {string} id - The GUID of the record
-     * @returns {Promise} - Promise resolving when the record is deleted
-     */
-    deleteRecord: function(entityName, id) {
-        return Xrm.WebApi.deleteRecord(entityName, id);
-    },
-
-    /**
-     * Executes a FetchXML query
-     * @param {string} fetchXml - The FetchXML query
-     * @returns {Promise} - Promise resolving to the query results
-     */
-    executeFetchXml: function(entityName, fetchXml) {
-        // Encode the FetchXML
-        const encodedFetch = encodeURIComponent(fetchXml);
-        return Xrm.WebApi.retrieveMultipleRecords(entityName, `?fetchXml=${encodedFetch}`);
-    },
-
-    /**
-     * Retrieves multiple records using OData query
-     * @param {string} entityName - The logical name of the entity
-     * @param {string} options - OData query options
-     * @returns {Promise} - Promise resolving to the query results
-     */
-    retrieveMultiple: function(entityName, options) {
-        return Xrm.WebApi.retrieveMultipleRecords(entityName, options || "");
-    },
-
-    /**
-     * Execute a Web API action
-     * @param {string} actionName - The name of the action
-     * @param {object} parameters - The parameters for the action
-     * @returns {Promise} - Promise resolving to the action result
-     */
-    executeAction: function(actionName, parameters) {
-        return Xrm.WebApi.execute({
-            getMetadata: () => {
-                return {
-                    boundParameter: null,
-                    parameterTypes: {},
-                    operationType: 0, // Action
-                    operationName: actionName
-                };
-            },
-            ...parameters
-        });
+  /**
+   * Enable or disable control(s)
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string|string[]} controlNames
+   * @param {boolean} isDisabled
+   */
+  function setFieldDisabled(context, controlNames, isDisabled) {
+    if (typeof isDisabled !== 'boolean') {
+      console.error("setFieldDisabled: 'isDisabled' must be boolean.");
+      return;
     }
-};
+    const formCtx = context.getFormContext();
+    toArray(controlNames).forEach(name => {
+      const ctrl = formCtx.getControl(name);
+      if (!ctrl) return console.error(`setFieldDisabled: Control '${name}' not found.`);
+      ctrl.setDisabled(isDisabled);
+    });
+  }
 
-/**
- * ============================
- * BUSINESS PROCESS FLOW METHODS
- * ============================
- */
-CRMUtils.BPF = {
-    /**
-     * Gets the active process instance ID
-     * @param {object} formContext - The form context
-     * @returns {string} - The active process instance ID
-     */
-    getActiveProcessInstanceId: function(formContext) {
-        try {
-            return formContext.data.process.getActiveProcess().getId();
-        } catch (e) {
-            console.error("Error getting active process: ", e);
-            return null;
-        }
-    },
-
-    /**
-     * Gets the active stage ID
-     * @param {object} formContext - The form context
-     * @returns {string} - The active stage ID
-     */
-    getActiveStageId: function(formContext) {
-        try {
-            return formContext.data.process.getActiveStage().getId();
-        } catch (e) {
-            console.error("Error getting active stage: ", e);
-            return null;
-        }
-    },
-
-    /**
-     * Moves to the next stage in the business process flow
-     * @param {object} formContext - The form context
-     */
-    moveToNextStage: function(formContext) {
-        try {
-            formContext.data.process.moveNext();
-            return true;
-        } catch (e) {
-            console.error("Error moving to next stage: ", e);
-            return false;
-        }
-    },
-
-    /**
-     * Moves to the previous stage in the business process flow
-     * @param {object} formContext - The form context
-     */
-    moveToPreviousStage: function(formContext) {
-        try {
-            formContext.data.process.movePrevious();
-            return true;
-        } catch (e) {
-            console.error("Error moving to previous stage: ", e);
-            return false;
-        }
-    },
-
-    /**
-     * Sets a specific stage as active
-     * @param {object} formContext - The form context
-     * @param {string} stageId - The ID of the stage to set as active
-     */
-    setActiveStage: function(formContext, stageId) {
-        try {
-            formContext.data.process.setActiveStage(stageId);
-            return true;
-        } catch (e) {
-            console.error("Error setting active stage: ", e);
-            return false;
-        }
+  /**
+   * Set required level for attribute(s)
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string|string[]} fieldNames
+   * @param {Xrm.AttributeRequiredLevel} level
+   */
+  function setFieldRequired(context, fieldNames, level) {
+    if (!level) {
+      console.error("setFieldRequired: 'level' is required.");
+      return;
     }
-};
+    const formCtx = context.getFormContext();
+    toArray(fieldNames).forEach(name => {
+      const attr = formCtx.getAttribute(name);
+      if (!attr) return console.error(`setFieldRequired: Field '${name}' not found.`);
+      attr.setRequiredLevel(level);
+    });
+  }
 
-/**
- * ============================
- * UTILITY METHODS
- * ============================
- */
-CRMUtils.Utility = {
-    /**
-     * Opens a form
-     * @param {string} entityName - The logical name of the entity
-     * @param {string} id - The GUID of the record (optional for new form)
-     * @param {object} parameters - Form parameters
-     */
-    openForm: function(entityName, id, parameters) {
-        const options = {};
-        if (parameters) {
-            options.formParameters = parameters;
-        }
-        
-        if (id) {
-            // Open existing record
-            Xrm.Navigation.openForm({
-                entityName: entityName,
-                entityId: id,
-                ...options
-            });
-        } else {
-            // Open new form
-            Xrm.Navigation.openForm({
-                entityName: entityName,
-                ...options
-            });
-        }
-    },
+  const VALID_LEVELS = ['INFO', 'WARNING', 'ERROR'];
 
-    /**
-     * Opens a lookup dialog
-     * @param {object} lookupOptions - The lookup options
-     * @returns {Promise} - Promise resolving to the selected items
-     */
-    openLookup: function(lookupOptions) {
-        return Xrm.Navigation.openLookupDialog(lookupOptions);
-    },
-
-    /**
-     * Shows a notification in the app
-     * @param {string} message - The message to display
-     * @param {string} level - Notification level (INFO, WARNING, ERROR)
-     * @param {string} title - The title of the notification
-     */
-    showNotification: function(message, level = "INFO", title = "") {
-        const options = {
-            type: level.toUpperCase(),
-            message: message,
-            title: title
-        };
-        Xrm.Navigation.openAlertDialog(options);
-    },
-
-    /**
-     * Shows a confirmation dialog
-     * @param {string} message - The message to display
-     * @param {string} title - The title of the dialog
-     * @returns {Promise} - Promise resolving to the user's choice
-     */
-    showConfirmDialog: function(message, title = "Confirmation") {
-        const confirmOptions = {
-            text: message,
-            title: title,
-            confirmButtonLabel: "Yes",
-            cancelButtonLabel: "No"
-        };
-        return Xrm.Navigation.openConfirmDialog(confirmOptions);
-    },
-
-    /**
-     * Formats a GUID with or without braces
-     * @param {string} guid - The GUID to format
-     * @param {boolean} withBraces - Whether to include braces
-     * @returns {string} - The formatted GUID
-     */
-    formatGuid: function(guid, withBraces = false) {
-        if (!guid) return guid;
-        
-        // Remove any existing braces and whitespace
-        guid = guid.replace(/[{}\s-]/g, "").toLowerCase();
-        
-        if (withBraces) {
-            return `{${guid}}`;
-        }
-        return guid;
-    },
-
-    /**
-     * Opens an entity record in a new window
-     * @param {string} entityName - The logical name of the entity
-     * @param {string} id - The GUID of the record
-     * @param {number} windowOptions - Window options (1: Dialog, 2: Dashboard)
-     */
-    openEntityRecord: function(entityName, id, windowOptions = 2) {
-        Xrm.Navigation.openForm({
-            entityName: entityName,
-            entityId: id,
-            openInNewWindow: true,
-            windowOptions: windowOptions
-        });
-    },
-
-    /**
-     * Opens a URL
-     * @param {string} url - The URL to open
-     * @param {number} windowOptions - Window options
-     */
-    openUrl: function(url, windowOptions) {
-        Xrm.Navigation.openUrl(url, windowOptions);
+  /**
+   * Show a form notification
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string} message
+   * @param {string} level - INFO | WARNING | ERROR
+   * @param {string} uniqueId
+   */
+  function showFormNotification(context, message, level, uniqueId) {
+    if (!message || !level || !uniqueId) {
+      console.error("showFormNotification: 'message', 'level', and 'uniqueId' are required.");
+      return;
     }
-};
-
-/**
- * ============================
- * RIBBON BUTTON METHODS
- * ============================
- */
-CRMUtils.Ribbon = {
-    /**
-     * Enables or disables a ribbon button
-     * @param {string} buttonId - The ID of the ribbon button
-     * @param {boolean} enabled - Whether the button should be enabled
-     */
-    enableButton: function(buttonId, enabled) {
-        if (typeof Xrm.Page.ui.setCommandBarItemVisible === "function") {
-            Xrm.Page.ui.setCommandBarItemVisible(buttonId, enabled);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Shows or hides a ribbon button
-     * @param {string} buttonId - The ID of the ribbon button
-     * @param {boolean} visible - Whether the button should be visible
-     */
-    showButton: function(buttonId, visible) {
-        if (typeof Xrm.Page.ui.setCommandBarItemVisible === "function") {
-            Xrm.Page.ui.setCommandBarItemVisible(buttonId, visible);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Refreshes the ribbon
-     */
-    refreshRibbon: function() {
-        if (typeof Xrm.Page.ui.refreshRibbon === "function") {
-            Xrm.Page.ui.refreshRibbon();
-            return true;
-        }
-        return false;
+    const lvl = level.toUpperCase();
+    if (!VALID_LEVELS.includes(lvl)) {
+      console.error(`showFormNotification: invalid level '${level}'.`);
+      return;
     }
-};
+    context.getFormContext().ui.setFormNotification(message, lvl, uniqueId);
+  }
 
-/**
- * ============================
- * OPTION SET HELPER METHODS
- * ============================
- */
-CRMUtils.OptionSet = {
-    /**
-     * Gets the text value of an option set
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the option set field
-     * @returns {string} - The text value of the selected option
-     */
-    getText: function(formContext, fieldName) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute && attribute.getAttributeType() === "optionset") {
-            const option = attribute.getSelectedOption();
-            return option ? option.text : null;
-        }
-        return null;
-    },
-
-    /**
-     * Sets an option set by value
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the option set field
-     * @param {number} value - The value to set
-     */
-    setValue: function(formContext, fieldName, value) {
-        return CRMUtils.Field.setValue(formContext, fieldName, value);
-    },
-
-    /**
-     * Gets the available options of an option set
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the option set field
-     * @returns {Array} - Array of options (with text and value properties)
-     */
-    getOptions: function(formContext, fieldName) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute && attribute.getAttributeType() === "optionset") {
-            return attribute.getOptions();
-        }
-        return [];
-    },
-
-    /**
-     * Adds an option to an option set control
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the option set field
-     * @param {number} value - The value of the option
-     * @param {string} text - The text of the option
-     */
-    addOption: function(formContext, fieldName, value, text) {
-        const control = CRMUtils.Form.getControl(formContext, fieldName);
-        if (control && control.addOption) {
-            const option = { value: value, text: text };
-            control.addOption(option);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Removes an option from an option set control
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the option set field
-     * @param {number} value - The value of the option to remove
-     */
-    removeOption: function(formContext, fieldName, value) {
-        const control = CRMUtils.Form.getControl(formContext, fieldName);
-        if (control && control.removeOption) {
-            control.removeOption(value);
-            return true;
-        }
-        return false;
+  /**
+   * Clear a form notification
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string} uniqueId
+   */
+  function clearFormNotification(context, uniqueId) {
+    if (!uniqueId) {
+      console.error("clearFormNotification: 'uniqueId' is required.");
+      return;
     }
-};
+    context.getFormContext().ui.clearFormNotification(uniqueId);
+  }
 
-/**
- * ============================
- * DATE AND TIME HELPER METHODS
- * ============================
- */
-CRMUtils.DateTime = {
-    /**
-     * Converts a date to a CRM date string
-     * @param {Date} date - The date to convert
-     * @returns {string} - The date in CRM format
-     */
-    toCRMDateString: function(date) {
-        if (!date) return null;
-        return date.toISOString();
-    },
-
-    /**
-     * Gets the current date in CRM format
-     * @returns {string} - The current date in CRM format
-     */
-    getCurrentDateString: function() {
-        return this.toCRMDateString(new Date());
-    },
-
-    /**
-     * Adds days to a date
-     * @param {Date} date - The base date
-     * @param {number} days - The number of days to add
-     * @returns {Date} - The new date
-     */
-    addDays: function(date, days) {
-        if (!date) return null;
-        const result = new Date(date);
-        result.setDate(result.getDate() + days);
-        return result;
-    },
-
-    /**
-     * Formats a date according to user's preferences in CRM
-     * @param {Date} date - The date to format
-     * @param {object} formatOptions - Formatting options
-     * @returns {string} - The formatted date string
-     */
-    formatDate: function(date, formatOptions) {
-        try {
-            return Xrm.Utility.formatDate(date, formatOptions);
-        } catch (e) {
-            console.error("Error formatting date: ", e);
-            return date.toLocaleDateString();
-        }
+  /**
+   * Get first lookup value
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string} fieldName
+   * @returns {Xrm.LookupValue|null}
+   */
+  function getLookupValue(context, fieldName) {
+    if (!fieldName) {
+      console.error("getLookupValue: 'fieldName' is required.");
+      return null;
     }
-};
+    const arr = context.getFormContext().getAttribute(fieldName)?.getValue();
+    return arr && arr.length ? arr[0] : null;
+  }
 
-/**
- * ============================
- * SUBGRID HELPER METHODS
- * ============================
- */
-CRMUtils.Subgrid = {
-    /**
-     * Refreshes a subgrid
-     * @param {object} formContext - The form context
-     * @param {string} subgridName - The name of the subgrid
-     */
-    refresh: function(formContext, subgridName) {
-        const subgrid = formContext.getControl(subgridName);
-        if (subgrid && subgrid.refresh) {
-            subgrid.refresh();
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Gets the selected records from a subgrid
-     * @param {object} formContext - The form context
-     * @param {string} subgridName - The name of the subgrid
-     * @returns {Array} - Array of selected records
-     */
-    getSelectedRecords: function(formContext, subgridName) {
-        const subgrid = formContext.getControl(subgridName);
-        if (subgrid && subgrid.getGrid && subgrid.getGrid().getSelectedRecords) {
-            return subgrid.getGrid().getSelectedRecords();
-        }
-        return [];
-    },
-
-    /**
-     * Gets the first selected record from a subgrid
-     * @param {object} formContext - The form context
-     * @param {string} subgridName - The name of the subgrid
-     * @returns {object} - The first selected record or null
-     */
-    getFirstSelectedRecord: function(formContext, subgridName) {
-        const records = this.getSelectedRecords(formContext, subgridName);
-        return records.length > 0 ? records[0] : null;
-    },
-
-    /**
-     * Opens the first selected record from a subgrid
-     * @param {object} formContext - The form context
-     * @param {string} subgridName - The name of the subgrid
-     */
-    openSelectedRecord: function(formContext, subgridName) {
-        const record = this.getFirstSelectedRecord(formContext, subgridName);
-        if (record) {
-            const entityName = record.getEntityName();
-            const id = record.getId();
-            CRMUtils.Utility.openEntityRecord(entityName, id);
-            return true;
-        }
-        return false;
+  /**
+   * Set a lookup value
+   * @param {Xrm.ExecutionContext<any, any>} context
+   * @param {string} fieldName
+   * @param {string} id
+   * @param {string} name
+   * @param {string} entityType
+   */
+  function setLookupValue(context, fieldName, id, name, entityType) {
+    if (!fieldName || !id || !name || !entityType) {
+      console.error("setLookupValue: all parameters are required.");
+      return;
     }
-};
+    const cleanId = id.replace(/[{}]/g, '');
+    const lookup = [{ id: cleanId, name, entityType }];
+    context.getFormContext().getAttribute(fieldName)?.setValue(lookup);
+  }
 
-/**
- * ============================
- * FORM EVENT HANDLERS
- * ============================
- */
-CRMUtils.Events = {
-    /**
-     * Common onLoad event handler
-     * @param {object} executionContext - The execution context
-     */
-    onLoad: function(executionContext) {
-        const formContext = CRMUtils.Form.getFormContext(executionContext);
-        // Implement your onLoad logic here
-        console.log("Form loaded", formContext);
-    },
-
-    /**
-     * Common onSave event handler
-     * @param {object} executionContext - The execution context
-     */
-    onSave: function(executionContext) {
-        const formContext = CRMUtils.Form.getFormContext(executionContext);
-        // Implement your onSave logic here
-        console.log("Form saved", formContext);
-    },
-
-    /**
-     * Common onChange event handler factory
-     * @param {string} fieldName - The logical name of the field
-     * @param {Function} callback - The callback function to execute
-     * @returns {Function} - The event handler function
-     */
-    onChange: function(fieldName, callback) {
-        return function(executionContext) {
-            const formContext = CRMUtils.Form.getFormContext(executionContext);
-            const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-            if (attribute && typeof callback === "function") {
-                callback(formContext, attribute.getValue(), attribute);
-            }
-        };
-    },
-
-    /**
-     * Adds an event handler to a field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {string} eventName - The name of the event
-     * @param {Function} handler - The event handler function
-     */
-    addHandler: function(formContext, fieldName, eventName, handler) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute && typeof handler === "function") {
-            attribute.addOnChange(handler);
-            return true;
-        }
-        return false;
-    },
-
-    /**
-     * Removes an event handler from a field
-     * @param {object} formContext - The form context
-     * @param {string} fieldName - The logical name of the field
-     * @param {string} eventName - The name of the event
-     * @param {Function} handler - The event handler function
-     */
-    removeHandler: function(formContext, fieldName, eventName, handler) {
-        const attribute = CRMUtils.Form.getAttribute(formContext, fieldName);
-        if (attribute && typeof handler === "function") {
-            attribute.removeOnChange(handler);
-            return true;
-        }
-        return false;
+  /**
+   * Generate a unique identifier string
+   * @param {string} prefix
+   * @returns {string}
+   */
+  function generateUniqueId(prefix) {
+    if (!prefix) {
+      console.error("generateUniqueId: 'prefix' is required.");
+      return '';
     }
-};
+    return `${prefix}_${Date.now()}_${Math.floor(Math.random() * 1000)}`;
+  }
 
-// Export the CRMUtils object for use in Dynamics 365
-window.CRMUtils = CRMUtils;
+  // Expose public API
+  return {
+    getFieldValue,
+    setFieldValue,
+    setFieldVisible,
+    setFieldDisabled,
+    setFieldRequired,
+    showFormNotification,
+    clearFormNotification,
+    getLookupValue,
+    setLookupValue,
+    generateUniqueId
+  };
+})();
