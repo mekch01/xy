@@ -1,0 +1,238 @@
+import { Page, Locator, expect } from '@playwright/test';
+
+/**
+ * Page Object Model for the New Conflicts Request page
+ */
+export class ConflictsRequestPage {
+  readonly page: Page;
+  
+  // Page elements
+  readonly pageTitle: Locator;
+  readonly saveAndCloseButton: Locator;
+  readonly flowButton: Locator;
+  
+  // General section
+  readonly generalTab: Locator;
+
+  // Deal Summary section
+  readonly projectNameInput: Locator;
+  readonly modifiedOnInput: Locator;
+  readonly statusDropdown: Locator;
+  readonly organizationInput: Locator;
+  readonly noteInput: Locator;
+  readonly tcoLeadInput: Locator;
+  readonly clearancTypeDropdown: Locator;
+  readonly clientNameDropdown: Locator;
+  readonly requesterInput: Locator;
+  readonly activeStatusCheckbox: Locator;
+
+  // NAICS section
+  readonly naicsNameInput: Locator;
+  
+  // Timing Sensitivities section
+  readonly timingSensitivitiesInput: Locator;
+  
+  // Key Deal Information section
+  readonly requestDateInput: Locator;
+  readonly pitchDateInput: Locator;
+  readonly materialChangesInput: Locator;
+  readonly dealLinksInput: Locator;
+  readonly confidentialityAgreementDateInput: Locator;
+  readonly confidentialityAgreementTermDateInput: Locator;
+  readonly estimatedFeeInput: Locator;
+  readonly estimatedFeeCurrencyDropdown: Locator;
+  readonly dealSizeInput: Locator;
+  readonly dealSizeCurrencyDropdown: Locator;
+
+  /**
+   * Initialize the POM with the page
+   */
+  constructor(page: Page) {
+    this.page = page;
+    
+    // Header elements
+    this.pageTitle = page.locator('text=New Conflicts Request');
+    this.saveAndCloseButton = page.locator('button:has-text("Save & Close")');
+    this.flowButton = page.locator('button:has-text("Flow")');
+    
+    // General section
+    this.generalTab = page.locator('text=General').first();
+    
+    // Deal Summary section
+    this.projectNameInput = page.locator('[aria-label="Project Name"]');
+    this.modifiedOnInput = page.locator('[aria-label="Modified On"]');
+    this.statusDropdown = page.locator('[aria-label="Status"]');
+    this.organizationInput = page.locator('[aria-label="Organization/M&A/Sale of the Company"]');
+    this.noteInput = page.locator('[aria-label="Note"]');
+    this.tcoLeadInput = page.locator('[aria-label="TCO Lead"]');
+    this.clearancTypeDropdown = page.locator('[aria-label="Clearance Type"]');
+    this.clientNameDropdown = page.locator('[aria-label="Client Name"]');
+    this.requesterInput = page.locator('[aria-label="Requester"]');
+    this.activeStatusCheckbox = page.locator('text=Active');
+    
+    // NAICS section
+    this.naicsNameInput = page.locator('[aria-label="NAICS Name"]');
+    
+    // Timing Sensitivities section
+    this.timingSensitivitiesInput = page.locator('[aria-label="Timing Sensitivities"]');
+    
+    // Key Deal Information
+    this.requestDateInput = page.locator('[aria-label="Request Date"]');
+    this.pitchDateInput = page.locator('[aria-label="Pitch Date"]');
+    this.materialChangesInput = page.locator('[aria-label="Material Changes"]');
+    this.dealLinksInput = page.locator('[aria-label="Deal Links"]');
+    this.confidentialityAgreementDateInput = page.locator('[aria-label="Confidentiality Agreement Date"]');
+    this.confidentialityAgreementTermDateInput = page.locator('[aria-label="Confidentiality Agreement Term Date"]');
+    this.estimatedFeeInput = page.locator('[aria-label="Estimated Fee (MM)"]');
+    this.estimatedFeeCurrencyDropdown = page.locator('[aria-label="Estimated Fee Currency"]');
+    this.dealSizeInput = page.locator('[aria-label="Deal Size (MM)"]');
+    this.dealSizeCurrencyDropdown = page.locator('[aria-label="Deal Size Currency"]');
+  }
+
+  /**
+   * Navigate to the New Conflicts Request page
+   */
+  async goto() {
+    // Assuming there's a specific URL to navigate to
+    await this.page.goto('/sandbox/conflicts-request/new');
+    await expect(this.pageTitle).toBeVisible();
+  }
+
+  /**
+   * Fill the Deal Summary section
+   */
+  async fillDealSummary({
+    projectName = '',
+    organization = '',
+    note = '',
+    tcoLead = '',
+    clientName = '',
+    requester = '',
+    status = 'Active',
+  }: {
+    projectName?: string;
+    organization?: string;
+    note?: string;
+    tcoLead?: string;
+    clientName?: string;
+    requester?: string;
+    status?: string;
+  }) {
+    if (projectName) await this.projectNameInput.fill(projectName);
+    if (organization) await this.organizationInput.fill(organization);
+    if (note) await this.noteInput.fill(note);
+    if (tcoLead) {
+      await this.tcoLeadInput.click();
+      await this.page.locator(`text=${tcoLead}`).click();
+    }
+    if (clientName) {
+      await this.clientNameDropdown.click();
+      await this.page.locator(`text=${clientName}`).click();
+    }
+    if (requester) await this.requesterInput.fill(requester);
+    if (status !== 'Active') await this.activeStatusCheckbox.uncheck();
+  }
+
+  /**
+   * Fill the NAICS section
+   */
+  async fillNAICS(naicsName: string) {
+    await this.naicsNameInput.fill(naicsName);
+  }
+
+  /**
+   * Fill the Timing Sensitivities section
+   */
+  async fillTimingSensitivities(timingSensitivities: string) {
+    await this.timingSensitivitiesInput.fill(timingSensitivities);
+  }
+
+  /**
+   * Fill the Key Deal Information section
+   */
+  async fillKeyDealInformation({
+    requestDate = '',
+    pitchDate = '',
+    materialChanges = '',
+    dealLinks = '',
+    confidentialityDate = '',
+    confidentialityTermDate = '',
+    estimatedFee = '',
+    estimatedFeeCurrency = '',
+    dealSize = '',
+    dealSizeCurrency = '',
+  }: {
+    requestDate?: string;
+    pitchDate?: string;
+    materialChanges?: string;
+    dealLinks?: string;
+    confidentialityDate?: string;
+    confidentialityTermDate?: string;
+    estimatedFee?: string;
+    estimatedFeeCurrency?: string;
+    dealSize?: string;
+    dealSizeCurrency?: string;
+  }) {
+    if (requestDate) await this.requestDateInput.fill(requestDate);
+    if (pitchDate) await this.pitchDateInput.fill(pitchDate);
+    if (materialChanges) await this.materialChangesInput.fill(materialChanges);
+    if (dealLinks) await this.dealLinksInput.fill(dealLinks);
+    if (confidentialityDate) await this.confidentialityAgreementDateInput.fill(confidentialityDate);
+    if (confidentialityTermDate) await this.confidentialityAgreementTermDateInput.fill(confidentialityTermDate);
+    if (estimatedFee) await this.estimatedFeeInput.fill(estimatedFee);
+    if (estimatedFeeCurrency) {
+      await this.estimatedFeeCurrencyDropdown.click();
+      await this.page.locator(`text=${estimatedFeeCurrency}`).click();
+    }
+    if (dealSize) await this.dealSizeInput.fill(dealSize);
+    if (dealSizeCurrency) {
+      await this.dealSizeCurrencyDropdown.click();
+      await this.page.locator(`text=${dealSizeCurrency}`).click();
+    }
+  }
+
+  /**
+   * Save the conflicts request form
+   */
+  async saveAndClose() {
+    await this.saveAndCloseButton.click();
+    // You may want to add a wait for navigation or success notification here
+  }
+
+  /**
+   * Complete full conflicts request with all required fields
+   */
+  async completeConflictsRequest({
+    projectName,
+    tcoLead,
+    clientName,
+    requester,
+    naicsName,
+    requestDate,
+    confidentialityDate,
+  }: {
+    projectName: string;
+    tcoLead: string;
+    clientName: string;
+    requester: string;
+    naicsName: string;
+    requestDate: string;
+    confidentialityDate: string;
+  }) {
+    await this.fillDealSummary({
+      projectName,
+      tcoLead,
+      clientName,
+      requester,
+    });
+    
+    await this.fillNAICS(naicsName);
+    
+    await this.fillKeyDealInformation({
+      requestDate,
+      confidentialityDate,
+    });
+    
+    await this.saveAndClose();
+  }
+}
