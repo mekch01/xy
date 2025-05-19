@@ -1,0 +1,158 @@
+import { Page, Locator } from '@playwright/test';
+
+/**
+ * Page Object Model for the Conflicts Management application
+ * Handles navigation and common interactions with the sidebar menu
+ */
+export class ConflictsNavigationPOM {
+  readonly page: Page;
+  
+  // Navigation Menu Sections
+  readonly homeLink: Locator;
+  readonly recentLink: Locator;
+  readonly pinnedLink: Locator;
+  
+  // Conflicts Section
+  readonly conflictsSection: Locator;
+  readonly dashboardLink: Locator;
+  readonly accountsLink: Locator;
+  readonly conflictsRequestsLink: Locator;
+  readonly conflictsQuestionsLink: Locator;
+  readonly sourceSystemsLink: Locator;
+  readonly conflictsTriggersLink: Locator;
+  
+  // ESIM Section
+  readonly esimSection: Locator;
+  readonly esimQuestionsLink: Locator;
+  readonly esimRequestsLink: Locator;
+
+  /**
+   * Initialize the Page Object Model
+   * @param page Playwright page object
+   */
+  constructor(page: Page) {
+    this.page = page;
+    
+    // Main Navigation Items
+    this.homeLink = page.locator('a', { hasText: 'Home' });
+    this.recentLink = page.locator('a', { hasText: 'Recent' });
+    this.pinnedLink = page.locator('a', { hasText: 'Pinned' });
+    
+    // Conflicts Section
+    this.conflictsSection = page.locator('text=Conflicts').first();
+    this.dashboardLink = page.locator('a', { hasText: 'Dashboard' });
+    this.accountsLink = page.locator('a', { hasText: 'Accounts' });
+    this.conflictsRequestsLink = page.locator('a', { hasText: 'Conflicts Requests' });
+    this.conflictsQuestionsLink = page.locator('a', { hasText: 'Conflicts Questions' });
+    this.sourceSystemsLink = page.locator('a', { hasText: 'Source Systems' });
+    this.conflictsTriggersLink = page.locator('a', { hasText: 'Conflicts Triggers' });
+    
+    // ESIM Section
+    this.esimSection = page.locator('text=ESIM').first();
+    this.esimQuestionsLink = page.locator('a', { hasText: 'ESIM Questions' });
+    this.esimRequestsLink = page.locator('a', { hasText: 'ESIM Requests' });
+  }
+
+  /**
+   * Navigate to the Home page
+   */
+  async navigateToHome(): Promise<void> {
+    await this.homeLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Recent page
+   */
+  async navigateToRecent(): Promise<void> {
+    await this.recentLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Pinned page
+   */
+  async navigateToPinned(): Promise<void> {
+    await this.pinnedLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Dashboard page
+   */
+  async navigateToDashboard(): Promise<void> {
+    await this.dashboardLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Accounts page
+   */
+  async navigateToAccounts(): Promise<void> {
+    await this.accountsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Conflicts Requests page
+   */
+  async navigateToConflictsRequests(): Promise<void> {
+    await this.conflictsRequestsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Conflicts Questions page
+   */
+  async navigateToConflictsQuestions(): Promise<void> {
+    await this.conflictsQuestionsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Source Systems page
+   */
+  async navigateToSourceSystems(): Promise<void> {
+    await this.sourceSystemsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the Conflicts Triggers page
+   */
+  async navigateToConflictsTriggers(): Promise<void> {
+    await this.conflictsTriggersLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the ESIM Questions page
+   */
+  async navigateToESIMQuestions(): Promise<void> {
+    await this.esimQuestionsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to the ESIM Requests page
+   */
+  async navigateToESIMRequests(): Promise<void> {
+    await this.esimRequestsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Check if we're currently on the Dashboard page
+   * @returns Promise<boolean> True if on Dashboard page
+   */
+  async isOnDashboard(): Promise<boolean> {
+    return await this.dashboardLink.getAttribute('aria-current') === 'page';
+  }
+
+  /**
+   * Wait for the navigation sidebar to be visible and ready
+   */
+  async waitForNavigationReady(): Promise<void> {
+    await this.homeLink.waitFor({ state: 'visible' });
+  }
+}
