@@ -1,0 +1,151 @@
+import { Page, Locator, test, expect } from '@playwright/test';
+
+/**
+ * Page Object Model for the Active Conflicts Requests page
+ * Focuses on the top menu row options
+ */
+export class ActiveConflictsRequestsPOM {
+  readonly page: Page;
+  
+  // Page title and header
+  readonly pageTitle: Locator;
+  
+  // Top menu row options
+  readonly focusedViewButton: Locator;
+  readonly showChartButton: Locator;
+  readonly newButton: Locator;
+  readonly deleteButton: Locator;
+  readonly refreshButton: Locator;
+  readonly moreOptionsButton: Locator;
+  readonly editColumnsButton: Locator;
+  readonly editFiltersButton: Locator;
+  
+  // Status filter
+  readonly statusFilterChip: Locator;
+  readonly statusFilterCloseButton: Locator;
+  
+  /**
+   * Initialize the Page Object Model
+   * @param page Playwright page object
+   */
+  constructor(page: Page) {
+    this.page = page;
+    
+    // Page header
+    this.pageTitle = page.locator('text=Active Conflicts Requests').first();
+    
+    // Top menu row options
+    this.focusedViewButton = page.locator('button:has-text("Focused view")');
+    this.showChartButton = page.locator('button:has-text("Show Chart")');
+    this.newButton = page.locator('button:has-text("New")');
+    this.deleteButton = page.locator('button:has-text("Delete")');
+    this.refreshButton = page.locator('button:has-text("Refresh")');
+    this.moreOptionsButton = page.locator('button[aria-label="More options"]');
+    this.editColumnsButton = page.locator('button:has-text("Edit columns")');
+    this.editFiltersButton = page.locator('button:has-text("Edit filters")');
+    
+    // Status filter
+    this.statusFilterChip = page.locator('text=Status: Active');
+    this.statusFilterCloseButton = page.locator('div:has-text("Status: Active") >> button[aria-label="Remove"]');
+  }
+
+  /**
+   * Navigate to the Active Conflicts Requests page
+   */
+  async navigateToActiveCR(): Promise<void> {
+    // This assumes you're already logged in and have access to the menu
+    const activeConflictsRequestsLink = this.page.locator('text=Active Conflicts Requests');
+    await activeConflictsRequestsLink.click();
+    await this.page.waitForLoadState('networkidle');
+    await this.pageTitle.waitFor({ state: 'visible' });
+  }
+
+  /**
+   * Click the Focused view button
+   */
+  async clickFocusedView(): Promise<void> {
+    await this.focusedViewButton.click();
+  }
+
+  /**
+   * Click the Show Chart button
+   */
+  async clickShowChart(): Promise<void> {
+    await this.showChartButton.click();
+  }
+
+  /**
+   * Click the New button to create a new conflict request
+   */
+  async clickNew(): Promise<void> {
+    await this.newButton.click();
+    // Wait for form to load
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Click the Delete button
+   * Note: This usually requires selecting items first
+   */
+  async clickDelete(): Promise<void> {
+    await this.deleteButton.click();
+  }
+
+  /**
+   * Click the Refresh button to reload data
+   */
+  async clickRefresh(): Promise<void> {
+    await this.refreshButton.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Click the More Options button
+   */
+  async clickMoreOptions(): Promise<void> {
+    await this.moreOptionsButton.click();
+  }
+
+  /**
+   * Click the Edit Columns button
+   */
+  async clickEditColumns(): Promise<void> {
+    await this.editColumnsButton.click();
+  }
+
+  /**
+   * Click the Edit Filters button
+   */
+  async clickEditFilters(): Promise<void> {
+    await this.editFiltersButton.click();
+  }
+
+  /**
+   * Remove the active status filter
+   */
+  async removeStatusFilter(): Promise<void> {
+    await this.statusFilterCloseButton.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Check if page is loaded properly
+   */
+  async isPageLoaded(): Promise<boolean> {
+    return await this.pageTitle.isVisible();
+  }
+
+  /**
+   * Get the current status filter value
+   */
+  async getStatusFilterValue(): Promise<string | null> {
+    if (await this.statusFilterChip.isVisible()) {
+      const text = await this.statusFilterChip.textContent();
+      // Extract just the status value
+      if (text) {
+        return text.replace('Status:', '').trim();
+      }
+    }
+    return null;
+  }
+}
