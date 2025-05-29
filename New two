@@ -1,0 +1,306 @@
+import { Page, Locator } from '@playwright/test';
+
+export class MyActivitiesPage {
+    readonly page: Page;
+    
+    // Header Navigation Elements
+    readonly backButton: Locator;
+    readonly searchBox: Locator;
+    
+    // View Control Elements
+    readonly focusedViewButton: Locator;
+    readonly showChartButton: Locator;
+    
+    // Command Bar Elements
+    readonly taskButton: Locator;
+    readonly emailButton: Locator;
+    readonly appointmentButton: Locator;
+    readonly phoneCallButton: Locator;
+    readonly deleteButton: Locator;
+    readonly refreshButton: Locator;
+    readonly emailLinkButton: Locator;
+    readonly flowButton: Locator;
+    readonly runReportButton: Locator;
+    readonly shareButton: Locator;
+    readonly moreCommandsButton: Locator;
+    
+    // Filter and View Elements
+    readonly myActivitiesDropdown: Locator;
+    readonly activityTypeFilter: Locator;
+    readonly editColumnsButton: Locator;
+    readonly editFiltersButton: Locator;
+    readonly filterByKeywordBox: Locator;
+    
+    // Grid Header Elements
+    readonly createdByColumn: Locator;
+    readonly activityTypeColumn: Locator;
+    readonly subjectColumn: Locator;
+    readonly regardingColumn: Locator;
+    readonly priorityColumn: Locator;
+    readonly startDateColumn: Locator;
+    readonly dueDateColumn: Locator;
+    
+    // Grid Content Area
+    readonly activitiesGrid: Locator;
+    readonly noDataMessage: Locator;
+    readonly rowsCountLabel: Locator;
+    
+    // Right Panel (Sandbox)
+    readonly sandboxPanel: Locator;
+    readonly sandboxTitle: Locator;
+    readonly sandboxMinimizeButton: Locator;
+    readonly sandboxMaximizeButton: Locator;
+    readonly sandboxCloseButton: Locator;
+    readonly sandboxHelpButton: Locator;
+    readonly sandboxSettingsButton: Locator;
+
+    constructor(page: Page) {
+        this.page = page;
+        
+        // Header Navigation Elements
+        this.backButton = page.locator('[title="Go back"]');
+        this.searchBox = page.locator('input[placeholder="Search"]');
+        
+        // View Control Elements
+        this.focusedViewButton = page.locator('[title="Focused view"]');
+        this.showChartButton = page.locator('[title="Show Chart"]');
+        
+        // Command Bar Elements
+        this.taskButton = page.locator('[title="Task"]');
+        this.emailButton = page.locator('[title="Email"]');
+        this.appointmentButton = page.locator('[title="Appointment"]');
+        this.phoneCallButton = page.locator('[title="Phone Call"]');
+        this.deleteButton = page.locator('[title="Delete"]');
+        this.refreshButton = page.locator('[title="Refresh"]');
+        this.emailLinkButton = page.locator('[title="Email a Link"]');
+        this.flowButton = page.locator('[title="Flow"]');
+        this.runReportButton = page.locator('[title="Run Report"]');
+        this.shareButton = page.locator('[title="Share"]');
+        this.moreCommandsButton = page.locator('[title="More commands"]');
+        
+        // Filter and View Elements
+        this.myActivitiesDropdown = page.locator('[aria-label="My Activities"]');
+        this.activityTypeFilter = page.locator('[aria-label="Activity Type filter"]');
+        this.editColumnsButton = page.locator('[title="Edit columns"]');
+        this.editFiltersButton = page.locator('[title="Edit filters"]');
+        this.filterByKeywordBox = page.locator('[placeholder="Filter by keyword"]');
+        
+        // Grid Header Elements
+        this.createdByColumn = page.locator('[aria-label="Created By column header"]');
+        this.activityTypeColumn = page.locator('[aria-label="Activity Type column header"]');
+        this.subjectColumn = page.locator('[aria-label="Subject column header"]');
+        this.regardingColumn = page.locator('[aria-label="Regarding column header"]');
+        this.priorityColumn = page.locator('[aria-label="Priority column header"]');
+        this.startDateColumn = page.locator('[aria-label="Start Date column header"]');
+        this.dueDateColumn = page.locator('[aria-label="Due Date column header"]');
+        
+        // Grid Content Area
+        this.activitiesGrid = page.locator('[role="grid"]');
+        this.noDataMessage = page.locator('text=We didn\'t find anything to show here');
+        this.rowsCountLabel = page.locator('text=Rows:');
+        
+        // Right Panel (Sandbox)
+        this.sandboxPanel = page.locator('[aria-label="SANDBOX"]');
+        this.sandboxTitle = page.locator('text=SANDBOX');
+        this.sandboxMinimizeButton = page.locator('[title="Minimize sandbox"]');
+        this.sandboxMaximizeButton = page.locator('[title="Maximize sandbox"]');
+        this.sandboxCloseButton = page.locator('[title="Close sandbox"]');
+        this.sandboxHelpButton = page.locator('[title="Sandbox help"]');
+        this.sandboxSettingsButton = page.locator('[title="Sandbox settings"]');
+    }
+
+    // Navigation Actions
+    async clickBack(): Promise<void> {
+        await this.backButton.click();
+    }
+
+    async searchActivities(searchTerm: string): Promise<void> {
+        await this.searchBox.fill(searchTerm);
+        await this.searchBox.press('Enter');
+    }
+
+    // View Control Actions
+    async toggleFocusedView(): Promise<void> {
+        await this.focusedViewButton.click();
+    }
+
+    async toggleShowChart(): Promise<void> {
+        await this.showChartButton.click();
+    }
+
+    // Command Bar Actions
+    async createTask(): Promise<void> {
+        await this.taskButton.click();
+    }
+
+    async createEmail(): Promise<void> {
+        await this.emailButton.click();
+    }
+
+    async createAppointment(): Promise<void> {
+        await this.appointmentButton.click();
+    }
+
+    async createPhoneCall(): Promise<void> {
+        await this.phoneCallButton.click();
+    }
+
+    async deleteSelectedActivities(): Promise<void> {
+        await this.deleteButton.click();
+    }
+
+    async refreshActivities(): Promise<void> {
+        await this.refreshButton.click();
+    }
+
+    async emailLink(): Promise<void> {
+        await this.emailLinkButton.click();
+    }
+
+    async runFlow(): Promise<void> {
+        await this.flowButton.click();
+    }
+
+    async runReport(): Promise<void> {
+        await this.runReportButton.click();
+    }
+
+    async shareActivities(): Promise<void> {
+        await this.shareButton.click();
+    }
+
+    async openMoreCommands(): Promise<void> {
+        await this.moreCommandsButton.click();
+    }
+
+    // Filter and View Actions
+    async selectActivityView(viewName: string): Promise<void> {
+        await this.myActivitiesDropdown.click();
+        await this.page.locator(`text=${viewName}`).click();
+    }
+
+    async filterByActivityType(activityType: string): Promise<void> {
+        await this.activityTypeFilter.click();
+        await this.page.locator(`text=${activityType}`).click();
+    }
+
+    async editColumns(): Promise<void> {
+        await this.editColumnsButton.click();
+    }
+
+    async editFilters(): Promise<void> {
+        await this.editFiltersButton.click();
+    }
+
+    async filterByKeyword(keyword: string): Promise<void> {
+        await this.filterByKeywordBox.fill(keyword);
+        await this.filterByKeywordBox.press('Enter');
+    }
+
+    // Grid Actions
+    async sortByColumn(columnName: string): Promise<void> {
+        const columnLocator = this.page.locator(`[aria-label="${columnName} column header"]`);
+        await columnLocator.click();
+    }
+
+    async selectActivityRow(rowIndex: number): Promise<void> {
+        const row = this.activitiesGrid.locator(`[role="row"]`).nth(rowIndex);
+        await row.click();
+    }
+
+    async selectAllActivities(): Promise<void> {
+        const selectAllCheckbox = this.activitiesGrid.locator('[role="columnheader"] input[type="checkbox"]');
+        await selectAllCheckbox.click();
+    }
+
+    async getActivityRowData(rowIndex: number): Promise<Record<string, string>> {
+        const row = this.activitiesGrid.locator(`[role="row"]`).nth(rowIndex);
+        const cells = row.locator('[role="gridcell"]');
+        const cellCount = await cells.count();
+        
+        const rowData: Record<string, string> = {};
+        for (let i = 0; i < cellCount; i++) {
+            const cellText = await cells.nth(i).textContent();
+            rowData[`column_${i}`] = cellText || '';
+        }
+        
+        return rowData;
+    }
+
+    // Sandbox Panel Actions
+    async minimizeSandbox(): Promise<void> {
+        await this.sandboxMinimizeButton.click();
+    }
+
+    async maximizeSandbox(): Promise<void> {
+        await this.sandboxMaximizeButton.click();
+    }
+
+    async closeSandbox(): Promise<void> {
+        await this.sandboxCloseButton.click();
+    }
+
+    async openSandboxHelp(): Promise<void> {
+        await this.sandboxHelpButton.click();
+    }
+
+    async openSandboxSettings(): Promise<void> {
+        await this.sandboxSettingsButton.click();
+    }
+
+    // Utility Methods
+    async waitForPageLoad(): Promise<void> {
+        await this.page.waitForLoadState('networkidle');
+        await this.activitiesGrid.waitFor({ state: 'visible' });
+    }
+
+    async isNoDataDisplayed(): Promise<boolean> {
+        return await this.noDataMessage.isVisible();
+    }
+
+    async getActivitiesCount(): Promise<number> {
+        const rows = this.activitiesGrid.locator('[role="row"]').filter({ hasNot: this.page.locator('[role="columnheader"]') });
+        return await rows.count();
+    }
+
+    async isSandboxVisible(): Promise<boolean> {
+        return await this.sandboxPanel.isVisible();
+    }
+
+    async verifyCommandBarVisible(): Promise<boolean> {
+        const commandButtons = [
+            this.taskButton,
+            this.emailButton,
+            this.appointmentButton,
+            this.phoneCallButton,
+            this.deleteButton,
+            this.refreshButton
+        ];
+
+        for (const button of commandButtons) {
+            if (!(await button.isVisible())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    async verifyGridHeadersVisible(): Promise<boolean> {
+        const headers = [
+            this.createdByColumn,
+            this.activityTypeColumn,
+            this.subjectColumn,
+            this.regardingColumn,
+            this.priorityColumn,
+            this.startDateColumn,
+            this.dueDateColumn
+        ];
+
+        for (const header of headers) {
+            if (!(await header.isVisible())) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
