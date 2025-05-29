@@ -1,0 +1,206 @@
+import { Page, Locator } from '@playwright/test';
+
+export class DynamicsCRMPage {
+    readonly page: Page;
+    
+    // Header Elements
+    readonly searchBox: Locator;
+    readonly saveAsButton: Locator;
+    readonly newButton: Locator;
+    readonly setAsDefaultButton: Locator;
+    readonly refreshAllButton: Locator;
+    readonly groupLeadDashboardDropdown: Locator;
+    
+    // Navigation Menu Elements
+    readonly homeLink: Locator;
+    readonly recentSection: Locator;
+    readonly recentExpandButton: Locator;
+    readonly pinnedSection: Locator;
+    readonly pinnedExpandButton: Locator;
+    
+    // My Work Section
+    readonly myWorkSection: Locator;
+    readonly dashboardsLink: Locator;
+    readonly activitiesLink: Locator;
+    readonly biReportsLink: Locator;
+    
+    // Customers Section
+    readonly customersSection: Locator;
+    readonly wcisSearchLink: Locator;
+    readonly clientsLink: Locator;
+    readonly contactsLink: Locator;
+    readonly interestTagsLink: Locator;
+    
+    // Capital Introduction Section
+    readonly capitalIntroductionSection: Locator;
+    readonly investorsLink: Locator;
+    
+    // Sales Section
+    readonly salesSection: Locator;
+    readonly salesExpandButton: Locator;
+
+    constructor(page: Page) {
+        this.page = page;
+        
+        // Header Elements
+        this.searchBox = page.locator('input[placeholder="Search"]');
+        this.saveAsButton = page.locator('[title="Save As"]');
+        this.newButton = page.locator('[title="New"]');
+        this.setAsDefaultButton = page.locator('[title="Set As Default"]');
+        this.refreshAllButton = page.locator('[title="Refresh All"]');
+        this.groupLeadDashboardDropdown = page.locator('text=Group Lead Dashboard');
+        
+        // Navigation Menu Elements
+        this.homeLink = page.locator('[data-id="sitemap-entity-Home"]');
+        this.recentSection = page.locator('text=Recent');
+        this.recentExpandButton = page.locator('[aria-label="Expand Recent"]');
+        this.pinnedSection = page.locator('text=Pinned');
+        this.pinnedExpandButton = page.locator('[aria-label="Expand Pinned"]');
+        
+        // My Work Section
+        this.myWorkSection = page.locator('text=My Work');
+        this.dashboardsLink = page.locator('[data-id="sitemap-entity-Dashboards"]');
+        this.activitiesLink = page.locator('[data-id="sitemap-entity-Activities"]');
+        this.biReportsLink = page.locator('[data-id="sitemap-entity-BI Reports"]');
+        
+        // Customers Section
+        this.customersSection = page.locator('text=Customers');
+        this.wcisSearchLink = page.locator('[data-id="sitemap-entity-WCIS Search"]');
+        this.clientsLink = page.locator('[data-id="sitemap-entity-Clients"]');
+        this.contactsLink = page.locator('[data-id="sitemap-entity-Contacts"]');
+        this.interestTagsLink = page.locator('[data-id="sitemap-entity-Interest Tags"]');
+        
+        // Capital Introduction Section
+        this.capitalIntroductionSection = page.locator('text=Capital Introduction');
+        this.investorsLink = page.locator('[data-id="sitemap-entity-Investors"]');
+        
+        // Sales Section
+        this.salesSection = page.locator('text=Sales');
+        this.salesExpandButton = page.locator('[aria-label="Expand Sales"]');
+    }
+
+    // Header Actions
+    async searchFor(searchTerm: string): Promise<void> {
+        await this.searchBox.fill(searchTerm);
+        await this.searchBox.press('Enter');
+    }
+
+    async clickSaveAs(): Promise<void> {
+        await this.saveAsButton.click();
+    }
+
+    async clickNew(): Promise<void> {
+        await this.newButton.click();
+    }
+
+    async clickSetAsDefault(): Promise<void> {
+        await this.setAsDefaultButton.click();
+    }
+
+    async clickRefreshAll(): Promise<void> {
+        await this.refreshAllButton.click();
+    }
+
+    async selectGroupLeadDashboard(): Promise<void> {
+        await this.groupLeadDashboardDropdown.click();
+    }
+
+    // Navigation Actions
+    async navigateToHome(): Promise<void> {
+        await this.homeLink.click();
+    }
+
+    async expandRecentSection(): Promise<void> {
+        await this.recentExpandButton.click();
+    }
+
+    async expandPinnedSection(): Promise<void> {
+        await this.pinnedExpandButton.click();
+    }
+
+    // My Work Navigation
+    async navigateToDashboards(): Promise<void> {
+        await this.dashboardsLink.click();
+    }
+
+    async navigateToActivities(): Promise<void> {
+        await this.activitiesLink.click();
+    }
+
+    async navigateToBIReports(): Promise<void> {
+        await this.biReportsLink.click();
+    }
+
+    // Customers Navigation
+    async navigateToWCISSearch(): Promise<void> {
+        await this.wcisSearchLink.click();
+    }
+
+    async navigateToClients(): Promise<void> {
+        await this.clientsLink.click();
+    }
+
+    async navigateToContacts(): Promise<void> {
+        await this.contactsLink.click();
+    }
+
+    async navigateToInterestTags(): Promise<void> {
+        await this.interestTagsLink.click();
+    }
+
+    // Capital Introduction Navigation
+    async navigateToInvestors(): Promise<void> {
+        await this.investorsLink.click();
+    }
+
+    // Sales Navigation
+    async expandSalesSection(): Promise<void> {
+        await this.salesExpandButton.click();
+    }
+
+    // Utility Methods
+    async waitForPageLoad(): Promise<void> {
+        await this.page.waitForLoadState('networkidle');
+    }
+
+    async isMenuSectionExpanded(sectionName: string): Promise<boolean> {
+        const section = this.page.locator(`text=${sectionName}`);
+        const expandButton = section.locator('xpath=following-sibling::button');
+        const ariaExpanded = await expandButton.getAttribute('aria-expanded');
+        return ariaExpanded === 'true';
+    }
+
+    async verifyHeaderElementsVisible(): Promise<boolean> {
+        const elements = [
+            this.searchBox,
+            this.saveAsButton,
+            this.newButton,
+            this.setAsDefaultButton,
+            this.refreshAllButton
+        ];
+
+        for (const element of elements) {
+            if (!(await element.isVisible())) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    async verifyNavigationMenuVisible(): Promise<boolean> {
+        const menuSections = [
+            this.homeLink,
+            this.myWorkSection,
+            this.customersSection,
+            this.capitalIntroductionSection,
+            this.salesSection
+        ];
+
+        for (const section of menuSections) {
+            if (!(await section.isVisible())) {
+                return false;
+            }
+        }
+        return true;
+    }
+}
