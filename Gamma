@@ -1,0 +1,280 @@
+import { Page, Locator, expect } from ‘@playwright/test’;
+
+export class AppointmentPage {
+readonly page: Page;
+
+// Header Actions
+readonly saveButton: Locator;
+readonly saveAndCloseButton: Locator;
+readonly refreshButton: Locator;
+readonly checkAccessButton: Locator;
+readonly processButton: Locator;
+readonly closeAppointmentButton: Locator;
+readonly deleteButton: Locator;
+readonly assignButton: Locator;
+readonly addToQueueButton: Locator;
+readonly convertToButton: Locator;
+readonly queueItemDetailsButton: Locator;
+readonly shareButton: Locator;
+
+// Navigation Tabs
+readonly summaryTab: Locator;
+readonly meetingParticipantsTab: Locator;
+readonly callReportTab: Locator;
+readonly relatedTab: Locator;
+
+// Appointment Details Section
+readonly appointmentTypeToggle: Locator;
+readonly prePlannedLabel: Locator;
+readonly requiredAttendeesField: Locator;
+readonly optionalAttendeesField: Locator;
+readonly subjectField: Locator;
+readonly authorField: Locator;
+readonly locationField: Locator;
+readonly restrictViewDropdown: Locator;
+readonly sourceField: Locator;
+
+// Client Details Section
+readonly clientNameField: Locator;
+readonly kamField: Locator;
+readonly marketsFocusField: Locator;
+readonly deskPriorityField: Locator;
+
+// Scheduling Information
+readonly startTimeField: Locator;
+readonly startDateField: Locator;
+readonly endTimeField: Locator;
+readonly endDateField: Locator;
+
+// Status Information
+readonly callReportStatus: Locator;
+readonly ownerInfo: Locator;
+
+constructor(page: Page) {
+this.page = page;
+
+```
+// Header Actions
+this.saveButton = page.locator('button:has-text("Save")');
+this.saveAndCloseButton = page.locator('button:has-text("Save & Close")');
+this.refreshButton = page.locator('button[title="Refresh"]');
+this.checkAccessButton = page.locator('button:has-text("Check Access")');
+this.processButton = page.locator('button:has-text("Process")');
+this.closeAppointmentButton = page.locator('button:has-text("Close Appointment")');
+this.deleteButton = page.locator('button:has-text("Delete")');
+this.assignButton = page.locator('button:has-text("Assign")');
+this.addToQueueButton = page.locator('button:has-text("Add to Queue")');
+this.convertToButton = page.locator('button:has-text("Convert To")');
+this.queueItemDetailsButton = page.locator('button:has-text("Queue Item Details")');
+this.shareButton = page.locator('button:has-text("Share")');
+
+// Navigation Tabs
+this.summaryTab = page.locator('tab[data-tab="Summary"], a:has-text("Summary")');
+this.meetingParticipantsTab = page.locator('tab[data-tab="Meeting Participants"], a:has-text("Meeting Participants")');
+this.callReportTab = page.locator('tab[data-tab="Call Report"], a:has-text("Call Report")');
+this.relatedTab = page.locator('tab[data-tab="Related"], a:has-text("Related")');
+
+// Appointment Details
+this.appointmentTypeToggle = page.locator('input[type="checkbox"][data-field="appointment-type"]');
+this.prePlannedLabel = page.locator('text=Pre-planned');
+this.requiredAttendeesField = page.locator('input[data-field="required-attendees"], [data-field="required-attendees"] input');
+this.optionalAttendeesField = page.locator('input[data-field="optional-attendees"], [data-field="optional-attendees"] input');
+this.subjectField = page.locator('input[data-field="subject"], textarea[data-field="subject"]');
+this.authorField = page.locator('input[data-field="author"], [data-field="author"] input');
+this.locationField = page.locator('input[data-field="location"]');
+this.restrictViewDropdown = page.locator('select[data-field="restrict-view"], [data-field="restrict-view"] select');
+this.sourceField = page.locator('input[data-field="source"], [data-field="source"] input');
+
+// Client Details
+this.clientNameField = page.locator('input[data-field="client-name"], [data-field="client"] input');
+this.kamField = page.locator('input[data-field="kam"], [data-field="kam"] input');
+this.marketsFocusField = page.locator('input[data-field="markets-focus"], [data-field="markets-focus"] input');
+this.deskPriorityField = page.locator('input[data-field="desk-priority"], [data-field="desk-priority"] input');
+
+// Scheduling
+this.startTimeField = page.locator('input[data-field="start-time"]');
+this.startDateField = page.locator('input[data-field="start-date"]');
+this.endTimeField = page.locator('input[data-field="end-time"]');
+this.endDateField = page.locator('input[data-field="end-date"]');
+
+// Status
+this.callReportStatus = page.locator('[data-field="call-report-status"]');
+this.ownerInfo = page.locator('[data-field="owner-info"]');
+```
+
+}
+
+// Navigation Methods
+async clickSummaryTab(): Promise<void> {
+await this.summaryTab.click();
+}
+
+async clickMeetingParticipantsTab(): Promise<void> {
+await this.meetingParticipantsTab.click();
+}
+
+async clickCallReportTab(): Promise<void> {
+await this.callReportTab.click();
+}
+
+async clickRelatedTab(): Promise<void> {
+await this.relatedTab.click();
+}
+
+// Action Methods
+async saveAppointment(): Promise<void> {
+await this.saveButton.click();
+}
+
+async saveAndCloseAppointment(): Promise<void> {
+await this.saveAndCloseButton.click();
+}
+
+async deleteAppointment(): Promise<void> {
+await this.deleteButton.click();
+}
+
+async refreshPage(): Promise<void> {
+await this.refreshButton.click();
+}
+
+async shareAppointment(): Promise<void> {
+await this.shareButton.click();
+}
+
+// Form Filling Methods
+async fillSubject(subject: string): Promise<void> {
+await this.subjectField.fill(subject);
+}
+
+async fillLocation(location: string): Promise<void> {
+await this.locationField.fill(location);
+}
+
+async addRequiredAttendee(attendee: string): Promise<void> {
+await this.requiredAttendeesField.fill(attendee);
+// Assuming there’s an autocomplete or dropdown that appears
+await this.page.keyboard.press(‘Enter’);
+}
+
+async addOptionalAttendee(attendee: string): Promise<void> {
+await this.optionalAttendeesField.fill(attendee);
+await this.page.keyboard.press(‘Enter’);
+}
+
+async setStartDateTime(date: string, time: string): Promise<void> {
+await this.startDateField.fill(date);
+await this.startTimeField.fill(time);
+}
+
+async setEndDateTime(date: string, time: string): Promise<void> {
+await this.endDateField.fill(date);
+await this.endTimeField.fill(time);
+}
+
+async togglePrePlanned(): Promise<void> {
+await this.appointmentTypeToggle.click();
+}
+
+async selectRestrictView(option: string): Promise<void> {
+await this.restrictViewDropdown.selectOption(option);
+}
+
+// Client Details Methods
+async setClientName(clientName: string): Promise<void> {
+await this.clientNameField.fill(clientName);
+}
+
+async setKAM(kam: string): Promise<void> {
+await this.kamField.fill(kam);
+}
+
+async setMarketsFocus(marketsFocus: string): Promise<void> {
+await this.marketsFocusField.fill(marketsFocus);
+}
+
+async setDeskPriority(deskPriority: string): Promise<void> {
+await this.deskPriorityField.fill(deskPriority);
+}
+
+// Verification Methods
+async verifyAppointmentTitle(expectedTitle: string): Promise<void> {
+await expect(this.page.locator(‘h1, .appointment-title’)).toContainText(expectedTitle);
+}
+
+async verifyCallReportStatus(expectedStatus: string): Promise<void> {
+await expect(this.callReportStatus).toContainText(expectedStatus);
+}
+
+async verifyOwnerInfo(expectedOwner: string): Promise<void> {
+await expect(this.ownerInfo).toContainText(expectedOwner);
+}
+
+async verifyPrePlannedToggleState(isChecked: boolean): Promise<void> {
+if (isChecked) {
+await expect(this.appointmentTypeToggle).toBeChecked();
+} else {
+await expect(this.appointmentTypeToggle).not.toBeChecked();
+}
+}
+
+// Utility Methods
+async waitForPageLoad(): Promise<void> {
+await this.page.waitForLoadState(‘domcontentloaded’);
+await this.summaryTab.waitFor({ state: ‘visible’ });
+}
+
+async isAppointmentSaved(): Promise<boolean> {
+// Check if there’s a success message or if the save button is no longer loading
+const successMessage = this.page.locator(’[data-testid=“success-message”], .success-notification’);
+try {
+await successMessage.waitFor({ state: ‘visible’, timeout: 3000 });
+return true;
+} catch {
+return false;
+}
+}
+
+async getAppointmentId(): Promise<string | null> {
+// Assuming there’s an ID field or it’s in the URL
+const url = this.page.url();
+const idMatch = url.match(/appointment/(\d+)/);
+return idMatch ? idMatch[1] : null;
+}
+
+// Complex Actions
+async createBasicAppointment(appointmentData: {
+subject: string;
+location?: string;
+startDate: string;
+startTime: string;
+endDate: string;
+endTime: string;
+requiredAttendees?: string[];
+optionalAttendees?: string[];
+}): Promise<void> {
+await this.fillSubject(appointmentData.subject);
+
+```
+if (appointmentData.location) {
+  await this.fillLocation(appointmentData.location);
+}
+
+await this.setStartDateTime(appointmentData.startDate, appointmentData.startTime);
+await this.setEndDateTime(appointmentData.endDate, appointmentData.endTime);
+
+if (appointmentData.requiredAttendees) {
+  for (const attendee of appointmentData.requiredAttendees) {
+    await this.addRequiredAttendee(attendee);
+  }
+}
+
+if (appointmentData.optionalAttendees) {
+  for (const attendee of appointmentData.optionalAttendees) {
+    await this.addOptionalAttendee(attendee);
+  }
+}
+```
+
+}
+}
