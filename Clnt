@@ -1,0 +1,279 @@
+// Dynamics 365 Client Page Object Model
+class ClientPage {
+constructor(page) {
+this.page = page;
+
+```
+// Navigation and Header Elements
+this.backButton = page.locator('[data-id="back-button"]');
+this.refreshButton = page.locator('[data-id="refresh-button"]');
+this.saveButton = page.locator('[data-id="save-button"]');
+this.saveAndCloseButton = page.locator('[data-id="save-and-close-button"]');
+this.deleteButton = page.locator('[data-id="delete-button"]');
+
+// Client Header Information
+this.clientName = page.locator('[data-id="header-title"]');
+this.clientStatus = page.locator('[data-id="header-status"]');
+this.clientAvatar = page.locator('[data-id="entity-image"]');
+
+// Tab Navigation
+this.profileTab = page.locator('li[aria-label="Profile"]');
+this.coverageTeamTab = page.locator('li[aria-label="Coverage Team"]');
+this.contactsTab = page.locator('li[aria-label="Contacts"]');
+this.entitiesTab = page.locator('li[aria-label="Entities"]');
+this.additionalDetailsTab = page.locator('li[aria-label="Additional Details"]');
+this.wcsHierarchyTab = page.locator('li[aria-label="WCS Hierarchy"]');
+this.administrationTab = page.locator('li[aria-label="Administration"]');
+this.relatedTab = page.locator('li[aria-label="Related"]');
+
+// Profile Section Elements
+this.entityProfileType = page.locator('[data-id="entity-profile-type"]');
+this.brokerDealer = page.locator('[data-id="broker-dealer"]');
+this.marketsFocus = page.locator('[data-id="markets-focus"]');
+this.deskPriority = page.locator('[data-id="desk-priority"]');
+this.creditTrading = page.locator('[data-id="credit-trading"]');
+this.clientTier = page.locator('[data-id="client-tier"]');
+this.website = page.locator('[data-id="website"]');
+
+// Sales Person Details
+this.salesPersonDetails = page.locator('[data-id="sales-person-details"]');
+this.superSalesUltimateParent = page.locator('[data-id="super-sales-ultimate-parent"]');
+this.salesUltimateParent = page.locator('[data-id="sales-ultimate-parent-name"]');
+
+// Command Bar Actions
+this.addToMarketingList = page.locator('[data-id="add-to-marketing-list"]');
+this.assign = page.locator('[data-id="assign"]');
+this.delete = page.locator('[data-id="delete"]');
+this.checkAccess = page.locator('[data-id="check-access"]');
+this.duplicate = page.locator('[data-id="duplicate"]');
+this.process = page.locator('[data-id="process"]');
+this.flow = page.locator('[data-id="flow"]');
+this.wordTemplates = page.locator('[data-id="word-templates"]');
+this.runReport = page.locator('[data-id="run-report"]');
+
+// Appointments & Phone Calls Section
+this.appointmentsSection = page.locator('[data-id="appointments-phone-calls"]');
+this.appointmentsList = page.locator('[data-id="appointments-list"]');
+this.newActivityButton = page.locator('[data-id="new-activity"]');
+this.refreshAppointments = page.locator('[data-id="refresh-appointments"]');
+
+// Appointment Grid Columns
+this.subjectColumn = page.locator('[data-id="subject-column"]');
+this.startDateColumn = page.locator('[data-id="start-date-column"]');
+this.owningBusinessUnit = page.locator('[data-id="owning-business-unit"]');
+this.activityTypeColumn = page.locator('[data-id="activity-type-column"]');
+
+// Individual Appointment Rows (example selectors)
+this.appointmentRow = (index) => page.locator(`[data-id="appointment-row-${index}"]`);
+this.appointmentSubject = (index) => page.locator(`[data-id="appointment-subject-${index}"]`);
+this.appointmentDate = (index) => page.locator(`[data-id="appointment-date-${index}"]`);
+this.appointmentType = (index) => page.locator(`[data-id="appointment-type-${index}"]`);
+
+// Timeline Section
+this.timelineSection = page.locator('[data-id="timeline"]');
+this.timelineRefresh = page.locator('[data-id="timeline-refresh"]');
+
+// Side Panel Elements
+this.hideComments = page.locator('[data-id="hide-comments"]');
+this.newMeetingEmail = page.locator('[data-id="new-meeting-email"]');
+this.priorityHigh = page.locator('[data-id="priority-high"]');
+this.marketLocation = page.locator('[data-id="market-location"]');
+
+// Form Fields (Generic selectors that work with Dynamics 365)
+this.textField = (fieldName) => page.locator(`input[data-id="${fieldName}.fieldControl-text-box-text"]`);
+this.dropdownField = (fieldName) => page.locator(`select[data-id="${fieldName}.fieldControl-combobox"]`);
+this.lookupField = (fieldName) => page.locator(`input[data-id="${fieldName}.fieldControl-LookupResultsDropdown_${fieldName}_textInputBox_with_filter_new"]`);
+this.dateField = (fieldName) => page.locator(`input[data-id="${fieldName}.fieldControl-date-time-input"]`);
+this.booleanField = (fieldName) => page.locator(`select[data-id="${fieldName}.fieldControl-checkbox-select"]`);
+
+// Grid Controls
+this.gridView = page.locator('[data-id="grid-view"]');
+this.gridRefresh = page.locator('[data-id="grid-refresh"]');
+this.gridSearch = page.locator('[data-id="grid-search"]');
+this.gridSort = (columnName) => page.locator(`[data-id="${columnName}-sort"]`);
+this.gridFilter = page.locator('[data-id="grid-filter"]');
+
+// Pagination
+this.nextPage = page.locator('[data-id="next-page"]');
+this.previousPage = page.locator('[data-id="previous-page"]');
+this.pageInfo = page.locator('[data-id="page-info"]');
+```
+
+}
+
+// Navigation Methods
+async navigateToTab(tabName) {
+const tabMap = {
+‘profile’: this.profileTab,
+‘coverage-team’: this.coverageTeamTab,
+‘contacts’: this.contactsTab,
+‘entities’: this.entitiesTab,
+‘additional-details’: this.additionalDetailsTab,
+‘wcs-hierarchy’: this.wcsHierarchyTab,
+‘administration’: this.administrationTab,
+‘related’: this.relatedTab
+};
+
+```
+await tabMap[tabName.toLowerCase()]?.click();
+```
+
+}
+
+async saveRecord() {
+await this.saveButton.click();
+}
+
+async saveAndClose() {
+await this.saveAndCloseButton.click();
+}
+
+async deleteRecord() {
+await this.deleteButton.click();
+// Handle confirmation dialog
+await this.page.locator(’[data-id=“confirmButton”]’).click();
+}
+
+// Form Field Methods
+async fillTextField(fieldName, value) {
+await this.textField(fieldName).fill(value);
+}
+
+async selectDropdownOption(fieldName, optionText) {
+await this.dropdownField(fieldName).selectOption({ label: optionText });
+}
+
+async selectLookupValue(fieldName, value) {
+await this.lookupField(fieldName).click();
+await this.lookupField(fieldName).fill(value);
+await this.page.locator(`[data-id="${fieldName}_selected_tag_text"]`).click();
+}
+
+async fillDateField(fieldName, date) {
+await this.dateField(fieldName).fill(date);
+}
+
+async toggleBooleanField(fieldName, value) {
+const field = this.booleanField(fieldName);
+const currentValue = await field.inputValue();
+if ((value && currentValue !== ‘true’) || (!value && currentValue !== ‘false’)) {
+await field.selectOption(value ? ‘true’ : ‘false’);
+}
+}
+
+// Appointments Methods
+async createNewAppointment() {
+await this.newActivityButton.click();
+await this.page.locator(’[data-id=“appointment-option”]’).click();
+}
+
+async getAppointmentDetails(index) {
+return {
+subject: await this.appointmentSubject(index).textContent(),
+date: await this.appointmentDate(index).textContent(),
+type: await this.appointmentType(index).textContent()
+};
+}
+
+async openAppointment(index) {
+await this.appointmentRow(index).click();
+}
+
+async refreshAppointmentsList() {
+await this.refreshAppointments.click();
+}
+
+// Grid Methods
+async searchInGrid(searchTerm) {
+await this.gridSearch.fill(searchTerm);
+await this.page.keyboard.press(‘Enter’);
+}
+
+async sortGridByColumn(columnName, direction = ‘asc’) {
+const sortButton = this.gridSort(columnName);
+await sortButton.click();
+
+```
+if (direction === 'desc') {
+  await sortButton.click(); // Click again for descending
+}
+```
+
+}
+
+async goToNextPage() {
+await this.nextPage.click();
+}
+
+async goToPreviousPage() {
+await this.previousPage.click();
+}
+
+// Validation Methods
+async getClientName() {
+return await this.clientName.textContent();
+}
+
+async getClientStatus() {
+return await this.clientStatus.textContent();
+}
+
+async isTabActive(tabName) {
+const tabMap = {
+‘profile’: this.profileTab,
+‘coverage-team’: this.coverageTeamTab,
+‘contacts’: this.contactsTab,
+‘entities’: this.entitiesTab,
+‘additional-details’: this.additionalDetailsTab,
+‘wcs-hierarchy’: this.wcsHierarchyTab,
+‘administration’: this.administrationTab,
+‘related’: this.relatedTab
+};
+
+```
+const tab = tabMap[tabName.toLowerCase()];
+return await tab.getAttribute('aria-selected') === 'true';
+```
+
+}
+
+async waitForPageLoad() {
+await this.page.waitForLoadState(‘networkidle’);
+await this.clientName.waitFor({ state: ‘visible’ });
+}
+
+// Command Bar Methods
+async addToMarketingList() {
+await this.addToMarketingList.click();
+}
+
+async assignRecord() {
+await this.assign.click();
+}
+
+async checkRecordAccess() {
+await this.checkAccess.click();
+}
+
+async duplicateRecord() {
+await this.duplicate.click();
+}
+
+async runProcess() {
+await this.process.click();
+}
+
+async runFlow() {
+await this.flow.click();
+}
+
+async generateWordTemplate() {
+await this.wordTemplates.click();
+}
+
+async runReport() {
+await this.runReport.click();
+}
+}
+
+module.exports = ClientPage;
