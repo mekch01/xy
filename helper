@@ -1,117 +1,87 @@
-validateSectorsDiscussed: async function (executionContext, isOnSave) {
-    var formContext = executionContext.getFormContext();
+// Core reusable validation function
+async function validateSectorsDiscussedRequirement(executionContext) {
+    const formContext = executionContext.getFormContext();
+    const activityType = formContext.getAttribute("cib_activity_type")?.getValue();
+    const phoneId = formContext.data.entity.getId()?.replace(/[{}]/g, "");
 
-    var sectorsGrid = formContext.getControl("Subgrid_new_2");
-    if (!sectorsGrid) return;
-
-    // Get activity type
-    var activityType = formContext.getAttribute(PhoneCallConstant.CIB_ACTIVITY_TYPE)?.getValue();
-    var equityValue = PhoneCallConstant.CIB_ACTIVITY_TYPE_EQUITY;
-    if (typeof equityValue === "string") equityValue = parseInt(equityValue, 10);
-
-    // Only validate if activity type is Equity
-    if (activityType !== equityValue) {
-        formContext.ui.clearFormNotification("sectors_discussed_required");
-        return;
-    }
-
-    // Get phone call ID
-    var phoneId = formContext.data.entity.getId();
-    if (!phoneId) return;
-    phoneId = phoneId.replace(/[{}]/g, "");
-
-    // Fetch Tickers Discussed to check for "None"
-    const fetchXml = CibHelper.buildFetchXml(
-        "cib_tickers_discussed",
-        ["cib_reference_master_ticker_id"],
-        [{ attribute: "cib_phone_call", operator: "eq", value: phoneId }]
-    );
+    if (!phoneId || activityType !== Cib.PhoneCallConstants.CIB_ACTIVITY_TYPE_EQUITY)
+        return { isValid: true };
 
     try {
-        const result = await Xrm.WebApi.retrieveMultipleRecords(
+        // Fetch all tickers discussed for this phone call
+        const result = await CibHelper.Util.buildFetchXml(
             "cib_tickers_discussed",
-            "?fetchXml=" + encodeURIComponent(fetchXml)
+            ["cib_reference_master_ticker_id", "cib_name"],
+            [{ attribute: "cib_phone_call", operator: "eq", value: phoneId }]
         );
 
-        const hasNoneTicker = result.entities.some(ticker => {
-            const tickerName = ticker["cib_reference_master_ticker_id@OData.Community.Display.V1.FormattedValue"];
-            return tickerName && tickerName.trim().toLowerCase() === "none";
-        });
+        let hasNoneTicker = false;
 
-        // Only proceed if "None" is in Tickers
-        if (!hasNoneTicker) {
-            formContext.ui.clearFormNotification("sectors_discussed_required");
-            return;
+        if (result?.entities?.length) {
+            hasNoneTicker = result.entities.some(entity => {
+                const tickerValue = entity["cib_reference_master_ticker_id"]?.Name?.toLowerCase() || "";
+                return tickerValue === "none";
+            });
         }
 
-        // Now check Sectors Discussed subgrid
-        const grid = sectorsGrid.getGrid ? sectorsGrid.getGrid() : null;
-        if (!grid) {
-            // If grid not ready, don't validate now — will be retried on load
-            return;
-        }
+        // If "None" is selected, Sectors Discussed must be filled
+        if (hasNoneTicker) {
+            const sectorsControl = formContext.getControl("cib_sectors_discussed");
 
-        const rowCount = grid.getRows().getLength();
+            if (!sectorsControl) {
+                console.warn("Sectors Discussed subgrid not found.");
+                return { isValid: true };
+            }
 
-        if (rowCount === 0) {
-            formContext.ui.setFormNotification(
-                "At least one 'Sectors Discussed' record must be added when 'None' is selected in Tickers Discussed.",
-                "ERROR",
-                "sectors_discussed_required"
-            );
+            const sectorsCount = sectorsControl.getGrid()?.getTotalRecordCount() || 0;
 
-            if (isOnSave) {
-                executionContext.getEventArgs().preventDefault();
+            if (sectorsCount === 0) {
+                const errorMsg = "At least one 'Sectors Discussed' record must be added if 'None' is selected in Tickers Discussed.";
+                formContext.ui.setFormNotification(errorMsg, "ERROR", "sector_discussed_required");
+                return { isValid: false, message: errorMsg };
+            } else {
+                formContext.ui.clearFormNotification("sector_discussed_required");
             }
         } else {
-            formContext.ui.clearFormNotification("sectors_discussed_required");
+            formContext.ui.clearFormNotification("sector_discussed_required");
         }
+
+        return { isValid: true };
+
     } catch (error) {
-        console.error("Error in validateSectorsDiscussed:", error.message);
-        // Don't block save on error — just log
-        if (isOnSave) {
-            executionContext.getEventArgs().preventDefault();
-        }
+        console.error("Validation failed:", error.message);
+        return { isValid: true }; // Don't block on error
     }
-},
+}
 
+// ✅ Async OnLoad handler
+async function onLoadHandler(executionContext) {
+    const formContext = executionContext.getFormContext();
 
+    // 1. Initial validation on load
+    await validateSectorsDiscussedRequirement(executionContext);
 
+    // 2. Attach subgrid event listeners to auto-revalidate
+    const tickersControl = formContext.getControl("cib_tickers_discussed");
+    const sectorsControl = formContext.getControl("cib_sectors_discussed");
 
-
-
-
-
-
-    var sectorsGrid = formContext.getControl("Subgrid_new_2");
-
-    if (sectorsGrid) {
-        const runValidation = async () => {
-            await this.validateSectorsDiscussed(executionContext, false);
-        };
-
-        // If subgrid is already loaded, validate immediately
-        if (sectorsGrid.isLoaded && sectorsGrid.isLoaded()) {
-            await runValidation();
-        } else {
-            // Otherwise, wait for subgrid to finish loading
-            sectorsGrid.addOnLoad(runValidation);
-        }
-    } else {
-        // Fallback: run validation (unlikely, but safe)
-        await this.validateSectorsDiscussed(executionContext, false);
+    if (tickersControl) {
+        tickersControl.addOnLoad(async () => {
+            await validateSectorsDiscussedRequirement(executionContext);
+        });
     }
 
+    if (sectorsControl) {
+        sectorsControl.addOnLoad(async () => {
+            await validateSectorsDiscussedRequirement(executionContext);
+        });
+    }
+}
 
-
-
-
-
-
-
-
-
-
-
-
-
+// ✅ Async OnSave handler
+async function onSaveHandler(executionContext) {
+    const result = await validateSectorsDiscussedRequirement(executionContext);
+    if (!result.isValid) {
+        executionContext.getEventArgs().preventDefault();
+    }
+}
