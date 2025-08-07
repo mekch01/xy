@@ -1,63 +1,117 @@
-// Helper function to check if 'None' ticker is present
-function hasNoneTicker(tickers) {
-    for (const ticker of tickers.entities) {
-        const tickerName = ticker["cib_reference_master_ticker_id@OData.Community.Display.V1.FormattedValue"];
-        if (tickerName && tickerName.trim().toLowerCase() === "none") {
-            return true;
-        }
-    }
-    return false;
-}
+validateSectorsDiscussed: async function (executionContext, isOnSave) {
+    var formContext = executionContext.getFormContext();
 
-// Function to validate sectors discussed
-async function validateSectorsDiscussed(executionContext, isOnSave) {
-    var sectorsGrid = executionContext.getControl("Subgrid_new_2");
-    if (!sectorsGrid) {
-        return;
-    }
+    var sectorsGrid = formContext.getControl("Subgrid_new_2");
+    if (!sectorsGrid) return;
 
-    var activityTypeAttr = executionContext.getAttribute(PhoneCallConstant.CIB_ACTIVITY_TYPE);
-    var activityType = activityTypeAttr ? activityTypeAttr.getValue() : null;
+    // Get activity type
+    var activityType = formContext.getAttribute(PhoneCallConstant.CIB_ACTIVITY_TYPE)?.getValue();
     var equityValue = PhoneCallConstant.CIB_ACTIVITY_TYPE_EQUITY;
+    if (typeof equityValue === "string") equityValue = parseInt(equityValue, 10);
 
-    if (typeof equityValue === "string") {
-        equityValue = parseInt(equityValue, 10);
-    }
-
-    // Get current Email record Id
-    var phoneId = executionContext.data.entity.getId();
-    if (!phoneId) {
+    // Only validate if activity type is Equity
+    if (activityType !== equityValue) {
+        formContext.ui.clearFormNotification("sectors_discussed_required");
         return;
     }
 
+    // Get phone call ID
+    var phoneId = formContext.data.entity.getId();
+    if (!phoneId) return;
     phoneId = phoneId.replace(/[{}]/g, "");
 
-    const fetchXmlForTickers = CibHelper.buildFetchXml("cib_tickers_discussed", ["cib_reference_master_ticker_id", "cib_name"], [{ attribute: "cib_phone_call", operator: "eq", value: phoneId }]);
+    // Fetch Tickers Discussed to check for "None"
+    const fetchXml = CibHelper.buildFetchXml(
+        "cib_tickers_discussed",
+        ["cib_reference_master_ticker_id"],
+        [{ attribute: "cib_phone_call", operator: "eq", value: phoneId }]
+    );
+
     try {
-        const result = await Xrm.WebApi.retrieveMultipleRecords("cib_tickers_discussed", "?fetchXml=" + encodeURIComponent(fetchXmlForTickers));
-        const hasNoneTickerFlag = hasNoneTicker(result);
+        const result = await Xrm.WebApi.retrieveMultipleRecords(
+            "cib_tickers_discussed",
+            "?fetchXml=" + encodeURIComponent(fetchXml)
+        );
 
-        if (hasNoneTickerFlag && activityType === equityValue) {
-            var sectorsGridObj = sectorsGrid.getGrid ? sectorsGrid.getGrid() : null;
-            var sectorsRows = sectorsGridObj.getRows();
+        const hasNoneTicker = result.entities.some(ticker => {
+            const tickerName = ticker["cib_reference_master_ticker_id@OData.Community.Display.V1.FormattedValue"];
+            return tickerName && tickerName.trim().toLowerCase() === "none";
+        });
 
-            if (sectorsRows.getLength() === 0) {
-                formContext.ui.setFormNotification(
-                    "At least one 'Sectors Discussed' record must be added if no 'Tickers Discussed' records are provided.",
-                    "ERROR",
-                    "sectors_discussed_required"
-                );
+        // Only proceed if "None" is in Tickers
+        if (!hasNoneTicker) {
+            formContext.ui.clearFormNotification("sectors_discussed_required");
+            return;
+        }
 
-                if (isOnSave) {
-                    executionContext.getEventArgs().preventDefault();
-                }
-            } else {
-                formContext.ui.clearFormNotification("sectors_discussed_required");
+        // Now check Sectors Discussed subgrid
+        const grid = sectorsGrid.getGrid ? sectorsGrid.getGrid() : null;
+        if (!grid) {
+            // If grid not ready, don't validate now — will be retried on load
+            return;
+        }
+
+        const rowCount = grid.getRows().getLength();
+
+        if (rowCount === 0) {
+            formContext.ui.setFormNotification(
+                "At least one 'Sectors Discussed' record must be added when 'None' is selected in Tickers Discussed.",
+                "ERROR",
+                "sectors_discussed_required"
+            );
+
+            if (isOnSave) {
+                executionContext.getEventArgs().preventDefault();
             }
         } else {
             formContext.ui.clearFormNotification("sectors_discussed_required");
         }
     } catch (error) {
-        console.log("FetchXML error: " + error.message);
+        console.error("Error in validateSectorsDiscussed:", error.message);
+        // Don't block save on error — just log
+        if (isOnSave) {
+            executionContext.getEventArgs().preventDefault();
+        }
     }
-}
+},
+
+
+
+
+
+
+
+
+
+    var sectorsGrid = formContext.getControl("Subgrid_new_2");
+
+    if (sectorsGrid) {
+        const runValidation = async () => {
+            await this.validateSectorsDiscussed(executionContext, false);
+        };
+
+        // If subgrid is already loaded, validate immediately
+        if (sectorsGrid.isLoaded && sectorsGrid.isLoaded()) {
+            await runValidation();
+        } else {
+            // Otherwise, wait for subgrid to finish loading
+            sectorsGrid.addOnLoad(runValidation);
+        }
+    } else {
+        // Fallback: run validation (unlikely, but safe)
+        await this.validateSectorsDiscussed(executionContext, false);
+    }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
