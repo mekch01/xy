@@ -1,0 +1,63 @@
+// Helper function to check if 'None' ticker is present
+function hasNoneTicker(tickers) {
+    for (const ticker of tickers.entities) {
+        const tickerName = ticker["cib_reference_master_ticker_id@OData.Community.Display.V1.FormattedValue"];
+        if (tickerName && tickerName.trim().toLowerCase() === "none") {
+            return true;
+        }
+    }
+    return false;
+}
+
+// Function to validate sectors discussed
+async function validateSectorsDiscussed(executionContext, isOnSave) {
+    var sectorsGrid = executionContext.getControl("Subgrid_new_2");
+    if (!sectorsGrid) {
+        return;
+    }
+
+    var activityTypeAttr = executionContext.getAttribute(PhoneCallConstant.CIB_ACTIVITY_TYPE);
+    var activityType = activityTypeAttr ? activityTypeAttr.getValue() : null;
+    var equityValue = PhoneCallConstant.CIB_ACTIVITY_TYPE_EQUITY;
+
+    if (typeof equityValue === "string") {
+        equityValue = parseInt(equityValue, 10);
+    }
+
+    // Get current Email record Id
+    var phoneId = executionContext.data.entity.getId();
+    if (!phoneId) {
+        return;
+    }
+
+    phoneId = phoneId.replace(/[{}]/g, "");
+
+    const fetchXmlForTickers = CibHelper.buildFetchXml("cib_tickers_discussed", ["cib_reference_master_ticker_id", "cib_name"], [{ attribute: "cib_phone_call", operator: "eq", value: phoneId }]);
+    try {
+        const result = await Xrm.WebApi.retrieveMultipleRecords("cib_tickers_discussed", "?fetchXml=" + encodeURIComponent(fetchXmlForTickers));
+        const hasNoneTickerFlag = hasNoneTicker(result);
+
+        if (hasNoneTickerFlag && activityType === equityValue) {
+            var sectorsGridObj = sectorsGrid.getGrid ? sectorsGrid.getGrid() : null;
+            var sectorsRows = sectorsGridObj.getRows();
+
+            if (sectorsRows.getLength() === 0) {
+                formContext.ui.setFormNotification(
+                    "At least one 'Sectors Discussed' record must be added if no 'Tickers Discussed' records are provided.",
+                    "ERROR",
+                    "sectors_discussed_required"
+                );
+
+                if (isOnSave) {
+                    executionContext.getEventArgs().preventDefault();
+                }
+            } else {
+                formContext.ui.clearFormNotification("sectors_discussed_required");
+            }
+        } else {
+            formContext.ui.clearFormNotification("sectors_discussed_required");
+        }
+    } catch (error) {
+        console.log("FetchXML error: " + error.message);
+    }
+}
