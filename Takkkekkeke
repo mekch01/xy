@@ -1,0 +1,152 @@
+public String prWellsXchangeLog(Connection pCon, String pQueueRefNo) {
+    this.logger.logInfo("Inside WellsXchangeProcedure.prWellsXchangeLog()..");
+
+    pStatus = -1;
+    pRespStatus = null;
+    pErrCode = null;
+    String lWxcLogErrCode = null;
+    String lWxcLogStatus = null;
+    pErrDesc = null;
+    String lExchRate = null;
+    pIsTrusted = null;
+    String lWxcLogRes = null;
+
+    String[] lWxcLog = null;
+    this.logger.logInfo("Inside WellsXchangeProcedure.prWellsXchangeLog() checkpoint 1");
+    this.logger.logInfo("Creating connection in procedure now...");
+    this.logger.logInfo(pQueueRefNo);
+
+    /*GBFALM-4528 starts*/
+    String lBranchCode = null;
+    String lDealSource = null;
+
+    try {
+        lWxcLogRes = gJdbcObj.loadWXData(pCon, pQueueRefNo);
+        this.logger.logInfo("Check point 2");
+    } catch (Exception e) {
+        e.printStackTrace();
+    }
+
+    this.logger.logInfo(lWxcLogRes);
+
+    if (lWxcLogRes != null) {
+        lWxcLog = lWxcLogRes.split("~");
+    } else {
+        lWxcLog = new String[0]; // or handle the null case appropriately
+    }
+
+    this.logger.logInfo("prWellsXchangeLog()..checkpoint 2");
+
+    if (lWxcLog.length == 0) {
+        handleEmptyLog(pCon);
+    } else {
+        processValidLog(pCon, pQueueRefNo, lWxcLog);
+    }
+
+    // Final update and return logic
+    try {
+        if (pStatus == -1)
+            pStatus = 0;
+        if (pRespStatus == null)
+            pRespStatus = "WXC PASS";
+
+        /*GBFALM-4528 starts*/
+        lBranchCode = lWxcLog[25];
+        lDealSource = lWxcLog[29];
+        if (!fnIsTrustedSource(pCon, lBranchCode, lDealSource)) {
+            this.logger.logInfo("Non-trusted deal source");
+            pIsTrusted = "N";
+        }
+        if (pIsTrusted == null)
+            pIsTrusted = "N";
+        /*GBFALM-4528 ends*/
+
+        gJdbcObj.updateWXLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+
+        this.logger.logInfo("Leaving prWellsXchangeLog()..");
+        lExchRate = lWxcLog[24];
+
+        return pErrCode + "~" + pErrDesc + "~" + pStatus + "~" + lExchRate;
+    } catch (Exception e) {
+        e.printStackTrace();
+        pStatus = 1;
+        pRespStatus = "WXC FAIL";
+        if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+            this.logger.logInfo("Failed in fetching error message");
+        } else {
+            pErrCode = "WXCH-RSP-17";
+        }
+        gJdbcObj.updateWXLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+        return null;
+    }
+}
+
+private void handleEmptyLog(Connection pCon) {
+    this.logger.logInfo("prWellsXchangeLog()..checkpoint 3");
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+    if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+        this.logger.logInfo("Failed in fetching error message");
+    } else {
+        pErrCode = "WXCH-RSP-17";
+        pErrDesc += " Failed in fetching WXC response log";
+    }
+}
+
+private void processValidLog(Connection pCon, String pQueueRefNo, String[] lWxcLog) {
+    this.logger.logInfo("prWellsXchangeLog()..checkpoint 4");
+    try {
+        if (pErrCode == null) {
+            this.logger.logInfo("prWellsXchangeLog()..checkpoint 5");
+            String lWxcLogErrCode = lWxcLog[14];
+            String lWxcLogStatus = lWxcLog[13];
+            if (lWxcLogErrCode == null)
+                pErrCode = null;
+            else {
+                if (lWxcLogErrCode.charAt(0) == '-')
+                    pErrCode = "WXC" + lWxcLogErrCode;
+                else
+                    pErrCode = "WXC-" + lWxcLogErrCode;
+                this.logger.logInfo("pErrCode" + pErrCode);
+            }
+            if (!fnGetErtbMsgs(pCon, pErrCode)) {
+                this.logger.logInfo("Failed in fetching error message");
+            } else {
+                this.logger.logInfo("Successfully fetched error message:" + pErrDesc);
+            }
+        }
+
+        boolean hasErrorCode = lWxcLogErrCode != null && !"0".equals(lWxcLogErrCode) &&
+                               !"6470".equals(lWxcLogErrCode) && !"3870".equals(lWxcLogErrCode);
+        boolean hasInvalidStatus = "Expired".equals(lWxcLogStatus) || "Canceled".equals(lWxcLogStatus);
+
+        if (hasErrorCode || hasInvalidStatus) {
+            this.logger.logInfo("WellsXchange response is empty");
+            pStatus = 1;
+            pRespStatus = "WXC FAIL";
+        } else {
+            this.logger.logInfo("WellsXchange validations for the payment");
+            if (!fnProcessPmt(pCon, pQueueRefNo, lWxcLog)) {
+                this.logger.logInfo("Failed in login fnProcessPmt");
+                pStatus = 1;
+                pRespStatus = "WXC FAIL";
+                if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+                    this.logger.logInfo("Failed in fetching error message");
+                } else {
+                    pErrCode = "WXCH-RSP-17";
+                    pErrDesc += " Failed in performing WXC validations";
+                }
+            }
+        }
+    } catch (Exception e) {
+        e.printStackTrace();
+        pStatus = 1;
+        pRespStatus = "WXC FAIL";
+        if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+            this.logger.logInfo("Failed in fetching error message");
+        } else {
+            pErrCode = "WXCH-RSP-17";
+        }
+        gJdbcObj.updateWXLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+    }
+}
