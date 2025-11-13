@@ -1,0 +1,307 @@
+public boolean fnNonTrstValidate(Connection pCon, String[] pWxcLog, String[] pExtExchQueue,
+                                 Double pBuyAmount, Double pSellAmount, Double pTolLimit, String pTolCcy) {
+    try {
+        // --- Initialize Variables ---
+        String lBuyAmtAvl = "N";
+        String lSellAmtAvl = "N";
+        String lDealStatus = pWxcLog[30];
+        String pH1 = null;
+        String pH2 = null;
+        String lBaseCcy = pWxcLog[19];
+        String lContCcy = pWxcLog[20];
+        String lBranchCode = pWxcLog[25];
+        Double lTolCalcAmtBase;
+        Double lTolCalcAmtCont;
+        Double lTolRate = 0.0;
+        Double lExchRate = Double.parseDouble(pWxcLog[24]);
+        String lBuySellInd = pWxcLog[28];
+        String lBuyCcy = pExtExchQueue[12];
+        String lSellCcy = pExtExchQueue[14];
+        Double lBaseAmt = Double.parseDouble(pWxcLog[17]);
+        Double lContAmt = Double.parseDouble(pWxcLog[18]);
+        String lQuotation = null;
+        Date lValueDate = null;
+        String[] ccyDetails = null;
+        String lRateReqPrf = null;
+
+        // Parse Value Date
+        try {
+            lValueDate = stringToSqlDate(pExtExchQueue[16], fcubsDateFormat);
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        String lHostCode = pExtExchQueue[2];
+
+        this.logger.info("Inside fnNonTrstValidate()..");
+        this.logger.info("Base ccy:" + lBaseCcy);
+        this.logger.info("Contract Ccy:" + lContCcy);
+        this.logger.info("Tolerance ccy:" + pTolCcy);
+        this.logger.info("Tolerance Limit:" + pTolLimit);
+        this.logger.info("Check if the buy and sell amounts are available in the queue");
+
+        // --- Validate Amounts and Set Availability Flags ---
+        validateAndSetAmountAvailability(pBuyAmount, pSellAmount, lBuyAmtAvl, lSellAmtAvl);
+
+        // --- Handle Deal Status: Not Settled or Settlement Not Required ---
+        if ("Not Settled".equals(lDealStatus) || "Settlement Not Required".equals(lDealStatus)) {
+            this.logger.info("Deal source is not trusted..");
+            this.logger.info("Deal not settled." + lDealStatus);
+            this.logger.info("Check tolerance");
+
+            pH1 = lBaseCcy + lContCcy;
+
+            // Attempt to get currency pair from cache
+            if (gCcyPair.get(pH2) == null) {
+                this.logger.info("Not found for: " + pH1);
+                pH2 = lContCcy + lBaseCcy;
+
+                if (!fnCcyPairCache(pCon, lBaseCcy, lContCcy, lBranchCode)) {
+                    this.logger.info("Failed in getting CCY Pair.");
+                    return false;
+                }
+            }
+
+            // Calculate Tolerance Rate and Amounts based on currency pair
+            calculateToleranceAmounts(pCon, pTolLimit, lBaseCcy, lContCcy, lExchRate, pH1, pH2, lBranchCode);
+
+            // --- Determine Validation Logic Based on Rate Preference ---
+            if ("C".equals(lRateReqPrf)) {
+                handleClientPreferenceValidation(pCon, lBuySellInd, lBaseCcy, lContCcy, lBuyAmtAvl, lSellAmtAvl, pBuyAmount, pSellAmount, lBaseAmt, lContAmt, lTolCalcAmtBase, lTolCalcAmtCont);
+            } else {
+                handleMarketPreferenceValidation(pCon, lBuySellInd, lBaseCcy, lContCcy, lBuyAmtAvl, lSellAmtAvl, pBuyAmount, pSellAmount, lBaseAmt, lContAmt, lTolCalcAmtBase, lTolCalcAmtCont);
+            }
+
+        } else {
+            // --- Handle Other Deal Statuses ---
+            this.logger.info("Deal status is not equal to not settled");
+            if (!fnGetErtbMsgs(pCon, "WXCH-RSP-13")) {
+                this.logger.info("Failed in fetching error message.");
+                return false;
+            } else {
+                pErrCode = "WXCH-RSP-13";
+            }
+            pWxcPass = false;
+            pStatus = 1;
+        }
+
+        this.logger.info("Returning from fnNonTrstValidate()..");
+        return true;
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        pStatus = 1;
+        pRespStatus = "WXC FAIL";
+        if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+            this.logger.info("Failed in fetching error message");
+        } else {
+            pErrCode = "WXCH-RSP-17";
+            pErrDesc += " Failed in non trusted validations";
+        }
+        return false;
+    }
+}
+
+// --- Helper Methods ---
+
+private void validateAndSetAmountAvailability(Double pBuyAmount, Double pSellAmount, String lBuyAmtAvl, String lSellAmtAvl) {
+    if (pBuyAmount != null) {
+        lBuyAmtAvl = "Y";
+    } else {
+        pBuyAmount = 0.0;
+    }
+
+    if (pSellAmount != null) {
+        lSellAmtAvl = "Y";
+    } else {
+        pSellAmount = 0.0;
+    }
+
+    if (pBuyAmount.compareTo(0.0) == 0) {
+        lBuyAmtAvl = "N";
+    }
+
+    if (pSellAmount.compareTo(0.0) == 0) {
+        lSellAmtAvl = "N";
+    }
+
+    this.logger.info("lBuyAmtAvl:" + lBuyAmtAvl);
+    this.logger.info("lSellAmtAvl:" + lSellAmtAvl);
+}
+
+private void calculateToleranceAmounts(Connection pCon, Double pTolLimit, String lBaseCcy, String lContCcy, Double lExchRate, String pH1, String pH2, String lBranchCode) {
+    if ((lBaseCcy != null && lBaseCcy.equals(pTolCcy)) || (lContCcy != null && lContCcy.equals(pTolCcy))) {
+        if (lBaseCcy != null && lBaseCcy.equals(pTolCcy)) {
+            this.logger.info("Base ccy is same as Tol ccy.");
+            lTolCalcAmtBase = pTolLimit;
+
+            if (gCcyPair.get(pH1) != null) {
+                this.logger.info("Found Pair " + pH1);
+                ccyDetails = gCcyPair.get(pH1).split("~");
+                lQuotation = ccyDetails[0];
+
+                if ("D".equals(lQuotation)) {
+                    lTolRate = lExchRate;
+                } else if ("I".equals(lQuotation)) {
+                    lTolRate = round((1 / lExchRate), 12);
+                }
+            } else if (gCcyPair.get(pH2) != null) {
+                this.logger.info("Found Pair" + pH2);
+                ccyDetails = gCcyPair.get(pH2).split("~");
+                lQuotation = ccyDetails[0];
+
+                if ("D".equals(lQuotation)) {
+                    lTolRate = round((1 / lExchRate), 12);
+                } else if ("I".equals(lQuotation)) {
+                    lTolRate = lExchRate;
+                }
+            }
+
+            this.logger.info("lTolRate:" + lTolRate);
+            lTolCalcAmtCont = fnRoundAmt(pCon, lContCcy, pTolLimit * lTolRate, lBranchCode);
+            this.logger.info("lTolCalcAmtCont:" + lTolCalcAmtCont);
+
+        } else {
+            this.logger.info("Cont ccy is same as Tol ccy.");
+            lTolCalcAmtCont = pTolLimit;
+
+            if (gCcyPair.get(pH1) != null) {
+                this.logger.info("Found Pair " + pH1);
+                ccyDetails = gCcyPair.get(pH1).split("~");
+                lQuotation = ccyDetails[0];
+
+                if ("D".equals(lQuotation)) {
+                    lTolRate = round((1 / lExchRate), 12);
+                } else if ("I".equals(lQuotation)) {
+                    lTolRate = lExchRate;
+                }
+            } else if (gCcyPair.get(pH2) != null) {
+                this.logger.info("Found Pair" + pH2);
+                ccyDetails = gCcyPair.get(pH2).split("~");
+                lQuotation = ccyDetails[0];
+
+                if ("D".equals(lQuotation)) {
+                    lTolRate = lExchRate;
+                } else if ("I".equals(lQuotation)) {
+                    lTolRate = round((1 / lExchRate), 12);
+                }
+            }
+
+            this.logger.info("lTolRate:" + lTolRate);
+            lTolCalcAmtBase = fnRoundAmt(pCon, lBaseCcy, pTolLimit * lTolRate, lBranchCode);
+            this.logger.info("lTolCalcAmtBase:" + lTolCalcAmtBase);
+        }
+    } else {
+        this.logger.info("None of the involved ccy is USD, fetch standard mid rate and perform conversion");
+        lTolCalcAmtBase = prAmt1ToAmt2Conversion(lBranchCode, pTolCcy, lBaseCcy, pTolLimit, lValueDate, lHostCode);
+        lTolCalcAmtCont = prAmt1ToAmt2Conversion(lBranchCode, pTolCcy, lContCcy, pTolLimit, lValueDate, lHostCode);
+    }
+
+    this.logger.info("Tolerance conversion completed");
+    this.logger.info("Calculated Base tolerance amount " + lTolCalcAmtBase);
+    this.logger.info("Calculated contract tolerance amount " + lTolCalcAmtCont);
+    this.logger.info("WXC Deal Status is Not Settled");
+}
+
+private void handleClientPreferenceValidation(Connection pCon, String lBuySellInd, String lBaseCcy, String lContCcy, String lBuyAmtAvl, String lSellAmtAvl, Double pBuyAmount, Double pSellAmount, Double lBaseAmt, Double lContAmt, Double lTolCalcAmtBase, Double lTolCalcAmtCont) {
+    this.logger.info("Client Preference");
+    if ("Sell".equals(lBuySellInd)) {
+        this.logger.info("Sell Indicator");
+        handleNullCurrencyCodes(lBaseCcy, lContCcy);
+        boolean isCurrencyMismatch = !lBaseCcy.equals(lBuyCcy) || !lContCcy.equals(lSellCcy);
+        boolean isAmountExceeded = ("Y".equals(lBuyAmtAvl) && pBuyAmount > lBaseAmt + lTolCalcAmtBase) ||
+                                   ("Y".equals(lSellAmtAvl) && pSellAmount > lContAmt + lTolCalcAmtCont);
+
+        if (isCurrencyMismatch || isAmountExceeded) {
+            this.logger.info("Failed in Wells Exchange Validations");
+            if (!fnGetErtbMsgs(pCon, "WXCH-RSP-06")) {
+                this.logger.info("Failed in fetching error message.");
+                return false;
+            } else {
+                pErrCode = "WXCH-RSP-06";
+                pErrDesc += " for currency pair" + lBaseCcy + " and " + lContCcy + ", amount" + lContAmt;
+            }
+            pWxcPass = false;
+            pStatus = 1;
+        } else {
+            pWxcPass = true;
+        }
+    } else {
+        this.logger.info("Buy Indicator");
+        handleNullCurrencyCodes(lBaseCcy, lContCcy);
+        boolean isCurrencyMismatch = !lContCcy.equals(lBuyCcy) || !lBaseCcy.equals(lSellCcy);
+        boolean isAmountExceeded = ("Y".equals(lSellAmtAvl) && pSellAmount > lBaseAmt + lTolCalcAmtBase) ||
+                                   ("Y".equals(lBuyAmtAvl) && pBuyAmount > lContAmt + lTolCalcAmtCont);
+
+        if (isCurrencyMismatch || isAmountExceeded) {
+            this.logger.info("Failed in Wells Exchange Validations");
+            if (!fnGetErtbMsgs(pCon, "WXCH-RSP-06")) {
+                this.logger.info("Failed in fetching error message.");
+                return false;
+            } else {
+                pErrCode = "WXCH-RSP-06";
+                pErrDesc += " for currency pair" + lBaseCcy + " and " + lContCcy + ", amount" + lContAmt;
+            }
+            pWxcPass = false;
+            pStatus = 1;
+        } else {
+            pWxcPass = true;
+        }
+    }
+}
+
+private void handleMarketPreferenceValidation(Connection pCon, String lBuySellInd, String lBaseCcy, String lContCcy, String lBuyAmtAvl, String lSellAmtAvl, Double pBuyAmount, Double pSellAmount, Double lBaseAmt, Double lContAmt, Double lTolCalcAmtBase, Double lTolCalcAmtCont) {
+    this.logger.info("Market Preference");
+    if ("Sell".equals(lBuySellInd)) {
+        this.logger.info("Sell Indicator");
+        handleNullCurrencyCodes(lBaseCcy, lContCcy);
+        boolean isCurrencyMismatch = !lContCcy.equals(lBuyCcy) || !lBaseCcy.equals(lSellCcy);
+        boolean isAmountExceeded = ("Y".equals(lSellAmtAvl) && pSellAmount > lBaseAmt + lTolCalcAmtBase) ||
+                                   ("Y".equals(lBuyAmtAvl) && pBuyAmount > lContAmt + lTolCalcAmtCont);
+
+        if (isCurrencyMismatch || isAmountExceeded) {
+            this.logger.info("Failed in Wells Exchange Validations");
+            if (!fnGetErtbMsgs(pCon, "WXCH-RSP-06")) {
+                this.logger.info("Failed in fetching error message.");
+                return false;
+            } else {
+                pErrCode = "WXCH-RSP-06";
+                pErrDesc += " for currency pair" + lBaseCcy + " and " + lContCcy + ", amount" + lContAmt;
+            }
+            pWxcPass = false;
+            pStatus = 1;
+        } else {
+            pWxcPass = true;
+        }
+    } else {
+        this.logger.info("Buy Indicator");
+        handleNullCurrencyCodes(lBaseCcy, lContCcy);
+        boolean isCurrencyMismatch = !lBaseCcy.equals(lBuyCcy) || !lContCcy.equals(lSellCcy);
+        boolean isAmountExceeded = ("Y".equals(lBuyAmtAvl) && pBuyAmount > lBaseAmt + lTolCalcAmtBase) ||
+                                   ("Y".equals(lSellAmtAvl) && pSellAmount > lContAmt + lTolCalcAmtCont);
+
+        if (isCurrencyMismatch || isAmountExceeded) {
+            this.logger.info("Failed in Wells Exchange Validations");
+            if (!fnGetErtbMsgs(pCon, "WXCH-RSP-06")) {
+                this.logger.info("Failed in fetching error message.");
+                return false;
+            } else {
+                pErrCode = "WXCH-RSP-06";
+                pErrDesc += " for currency pair" + lBaseCcy + " and " + lContCcy + ", amount" + lContAmt;
+            }
+            pWxcPass = false;
+            pStatus = 1;
+        } else {
+            pWxcPass = true;
+        }
+    }
+}
+
+private void handleNullCurrencyCodes(String lBaseCcy, String lContCcy) {
+    if ("null".equals(lBaseCcy) || lBaseCcy == null) {
+        lBaseCcy = "XXX";
+    }
+    if (lContCcy == null || "null".equals(lContCcy)) {
+        lContCcy = "XXX";
+    }
+}
