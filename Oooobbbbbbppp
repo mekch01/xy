@@ -1,0 +1,249 @@
+public boolean fnValidatePmt(Connection pCon, String pQueueRefNo, String[] pWxcLog) {
+    this.logger.logInfo("Inside fnValidatePmt checkpoint 1.1");
+
+    Double lWxcExchRate = Double.parseDouble(pWxcLog[24]);
+    String lBranchCode = pWxcLog[25];
+    String lDealSource = pWxcLog[29];
+    this.logger.logInfo("Deal Source:" + lDealSource);
+
+    pTo1Rec = null;
+    String[] lTo1Rec = null;
+    String lDealStatus = pWxcLog[30];
+
+    Double lBaseAmt = Double.parseDouble(pWxcLog[17]);
+    Double lContAmt = Double.parseDouble(pWxcLog[18]);
+    pWxcPass = false;
+
+    this.logger.logInfo("Inside fnValidatePmt checkpoint 1.2");
+
+    try {
+        this.logger.logInfo("Inside fnValidatePmt checkpoint 2");
+        String lExtExchQueueRes = fetchExtExchQueue(pCon, pQueueRefNo);
+        if (lExtExchQueueRes == null) return false;
+
+        String[] lExtExchQueue = lExtExchQueueRes.split("~");
+        Double lBuyAmount = parseAmount(lExtExchQueue[13]);
+        Double lSellAmount = parseAmount(lExtExchQueue[15]);
+
+        String lValueDateType = pWxcLog[31];
+        ValueDates dates = parseValueDates(lExtExchQueue, pWxcLog);
+        if (dates == null) {
+            this.logger.logInfo("Failed in stringToSqlDate()..");
+        }
+
+        ensureTrustedStatus(pCon, lBranchCode, lDealSource);
+        if (pIsTrusted == null) pIsTrusted = "N";
+
+        Double lTo1Limit = 0.0;
+        String lTo1Ccy = null;
+        if ("N".equals(pIsTrusted) && needsToleranceCheck(lDealStatus)) {
+            if (fnGetTolerance(pCon, lBranchCode)) {
+                lTo1Rec = pTo1Rec.split("~");
+                lTo1Limit = Double.parseDouble(lTo1Rec[0]);
+                lTo1Ccy = lTo1Rec[1];
+            }
+            this.logger.logInfo("1_Tol_Limit:" + lTo1Limit);
+            this.logger.logInfo("1_Tol_Ccy:" + lTo1Ccy);
+        }
+
+        logValidationInputs(lWxcExchRate, lBuyAmount, lSellAmount, lBaseAmt, lContAmt);
+
+        if ("N".equals(pIsTrusted)) {
+            if (!runNonTrustedValidation(pCon, pWxcLog, lExtExchQueue, lBuyAmount, lSellAmount, lTo1Limit, lTo1Ccy)) {
+                return false;
+            }
+        } else {
+            if (!runTrustedValidation(pCon, pWxcLog, lExtExchQueue, lBuyAmount, lSellAmount)) {
+                return false;
+            }
+        }
+
+        if (pWxcPass) {
+            if (!validateValueDate(pCon, lValueDateType, dates)) {
+                return false;
+            }
+        }
+
+        finalizeResponse();
+        this.logger.logInfo("Returning from fnValidatePmt()..");
+        return true;
+
+    } catch (Exception e) {
+        handleValidationException(e, pCon);
+        return false;
+    }
+}
+
+
+private String fetchExtExchQueue(Connection pCon, String pQueueRefNo) {
+    try {
+        this.logger.logInfo("Inside fnValidatePmt checkpoint 3");
+        return gJdbcObj.queryExtExchRateQueue(pCon, pQueueRefNo);
+    } catch (Exception e) {
+        e.printStackTrace();
+        this.logger.logInfo("Failed in Ext Exch Record Select...");
+        reportError(pCon, "WXCH-RSP-17", " Failed in fetching external exchange queue data");
+        return null;
+    }
+}
+
+private Double parseAmount(String value) {
+    if ("null".equals(value) || value == null) return 0.0;
+    return Double.parseDouble(value);
+}
+
+private ValueDates parseValueDates(String[] lExtExchQueue, String[] pWxcLog) {
+    try {
+        Date lValueDate = safeParseDate(lExtExchQueue[16]);
+        Date lDealDate = safeParseDate(pWxcLog[37]);
+        Date lStartDate = null;
+        Date lEndDate = null;
+        Date lRespValueDate = null;
+
+        String lValueDateType = pWxcLog[31];
+        if ("Window".equals(lValueDateType)) {
+            lStartDate = safeParseDate(pWxcLog[32]);
+            lEndDate = safeParseDate(pWxcLog[33]);
+        } else if (!("null".equals(pWxcLog[15]) || pWxcLog[15] == null)) {
+            lRespValueDate = safeParseDate(pWxcLog[15]);
+        }
+
+        return new ValueDates(lValueDate, lDealDate, lStartDate, lEndDate, lRespValueDate, lValueDateType);
+    } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+    }
+}
+
+private Date safeParseDate(String dateStr) {
+    if ("null".equals(dateStr) || dateStr == null) return null;
+    return stringToSqlDate(dateStr, fcubsDateFormat);
+}
+
+private void ensureTrustedStatus(Connection pCon, String lBranchCode, String lDealSource) {
+    if (!fnIsTrustedSource(pCon, lBranchCode, lDealSource)) {
+        this.logger.logInfo("Failed in fetching trusted source maintenance");
+        pIsTrusted = "N";
+    }
+}
+
+private boolean needsToleranceCheck(String lDealStatus) {
+    return "Not Settled".equals(lDealStatus) || "Settlement not required".equals(lDealStatus);
+}
+
+private void logValidationInputs(Double lWxcExchRate, Double lBuyAmount, Double lSellAmount, Double lBaseAmt, Double lContAmt) {
+    this.logger.logInfo("p_Wellsexch_Log.Wxc_Exch_Rate :" + lWxcExchRate);
+    this.logger.logInfo("1_Ext_Exch_Queue.Buy_Amount :" + lBuyAmount);
+    this.logger.logInfo("1_Ext_Exch_Queue.Sell_Amount :" + lSellAmount);
+    this.logger.logInfo("p_Wellsexch_Log.Base_Amt :" + lBaseAmt);
+    this.logger.logInfo("p_Wellsexch_Log.Cont_Amt :" + lContAmt);
+    this.logger.logInfo("pIsTrusted" + pIsTrusted);
+}
+
+private boolean runNonTrustedValidation(Connection pCon, String[] pWxcLog, String[] lExtExchQueue,
+        Double lBuyAmount, Double lSellAmount, Double lTo1Limit, String lTo1Ccy) {
+    this.logger.logInfo("Deal source Not trusted");
+    if (!fnNonTrstValidate(pCon, pWxcLog, lExtExchQueue, lBuyAmount, lSellAmount, lTo1Limit, lTo1Ccy)) {
+        this.logger.logInfo("Failed in non trusted validations");
+        reportError(pCon, "WXCH-RSP-17", " Failed in non-trusted validations");
+        return false;
+    }
+    return true;
+}
+
+private boolean runTrustedValidation(Connection pCon, String[] pWxcLog, String[] lExtExchQueue,
+        Double lBuyAmount, Double lSellAmount) {
+    this.logger.logInfo("Deal Source is trusted");
+    if (!fnTrustedValidate(pCon, pWxcLog, lExtExchQueue, lBuyAmount, lSellAmount)) {
+        this.logger.logInfo("Failed in trusted validations");
+        reportError(pCon, "WXCH-RSP-17", " Failed in trusted validations");
+        return false;
+    }
+    return true;
+}
+
+private boolean validateValueDate(Connection pCon, String lValueDateType, ValueDates dates) {
+    Date lValueDate = (dates.lValueDate != null) ? dates.lValueDate : dates.lDealDate;
+
+    if ("Window".equals(lValueDateType)) {
+        if (dates.lStartDate == null || dates.lEndDate == null) {
+            pWxcPass = false;
+            reportError(pCon, "WXCH-RSP-06", " for value date (null) in the window (null) to (null)");
+            return false;
+        }
+        if (!lValueDate.before(dates.lStartDate) && !lValueDate.after(dates.lEndDate)) {
+            this.logger.logInfo("Value date fits in the window");
+        } else {
+            this.logger.logInfo("Value date does not fit in the window");
+            pWxcPass = false;
+            reportError(pCon, "WXCH-RSP-06",
+                " for value date " + lValueDate + " in the window " + dates.lStartDate + " to " + dates.lEndDate);
+            return false;
+        }
+    } else {
+        Date respDate = dates.lRespValueDate;
+        if (lValueDate != null && respDate != null && lValueDate.compareTo(respDate) == 0) {
+            this.logger.logInfo("Spot Value Date Matching success");
+        } else {
+            this.logger.logInfo("Spot Value Date Matching failed");
+            pWxcPass = false;
+            pStatus = 1;
+            String dateStr = (respDate != null) ? respDate.toString() : "(null)";
+            reportError(pCon, "WXCH-RSP-06", " for value date " + dateStr);
+            return false;
+        }
+    }
+    return true;
+}
+
+private void finalizeResponse() {
+    if (pWxcPass) {
+        this.logger.logInfo("WXC Status is Pass");
+        pRespStatus = "WXC PASS";
+        pStatus = 0;
+    } else {
+        this.logger.logInfo("Inside failure case");
+        pRespStatus = "WXC FAIL";
+        pStatus = 1;
+    }
+}
+
+private void reportError(Connection pCon, String code, String desc) {
+    if (!fnGetErtbMsgs(pCon, code)) {
+        this.logger.logInfo("Failed in fetching error message");
+    } else {
+        pErrCode = code;
+        pErrDesc += desc;
+    }
+}
+
+private void handleValidationException(Exception e, Connection pCon) {
+    e.printStackTrace();
+    pStatus = 1;
+    this.logger.logInfo("In exception during value date check..");
+    pRespStatus = "WXC FAIL";
+    reportError(pCon, "WXCH-RSP-17", " Failed in WXC validations check");
+}
+
+
+private static class ValueDates {
+    Date lValueDate, lDealDate, lStartDate, lEndDate, lRespValueDate;
+    String lValueDateType;
+
+    ValueDates(Date lValueDate, Date lDealDate, Date lStartDate, Date lEndDate, Date lRespValueDate, String lValueDateType) {
+        this.lValueDate = lValueDate;
+        this.lDealDate = lDealDate;
+        this.lStartDate = lStartDate;
+        this.lEndDate = lEndDate;
+        this.lRespValueDate = lRespValueDate;
+        this.lValueDateType = lValueDateType;
+    }
+}
+
+
+
+
+
+
+
+
