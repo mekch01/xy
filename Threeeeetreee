@@ -1,0 +1,278 @@
+// =============== Supporting Result Classes ===============
+// Place these at the top of your class (outside any method)
+
+/**
+ * Holds availability flags and sanitized amount values.
+ */
+private static class AvailabilityFlags {
+    final String buyAvl;
+    final String sellAvl;
+    final Double buyAmount;
+    final Double sellAmount;
+    
+    AvailabilityFlags(String buyAvl, String sellAvl, Double buyAmount, Double sellAmount) {
+        this.buyAvl = buyAvl;
+        this.sellAvl = sellAvl;
+        this.buyAmount = buyAmount;
+        this.sellAmount = sellAmount;
+    }
+}
+
+/**
+ * Holds calculated tolerance amounts for base and contra currencies.
+ */
+private static class ToleranceResult {
+    final Double baseAmt;
+    final Double contAmt;
+    
+    ToleranceResult(Double base, Double cont) {
+        this.baseAmt = base;
+        this.contAmt = cont;
+    }
+}
+
+// =============== Main Method ===============
+/**
+ * Validates a non-trusted WellsXchange payment.
+ * Returns true if validation passes, false otherwise.
+ */
+public boolean fnNonTrstValidate(Connection pCon, String[] plWxcLog, String[] pExtExchQueue,
+                                 Double pBuyAmount, Double pSellAmount, Double pTolLimit, String pTolCcy) {
+    logger.logInfo("Inside fnNonTrstValidate()..");
+
+    try {
+        // Parse input logs
+        String lDealStatus = plWxcLog[30];
+        String lBaseCcy = plWxcLog[19];
+        String lContCcy = plWxcLog[20];
+        String lBranchCode = plWxcLog[25];
+        Double lExchRate = Double.parseDouble(plWxcLog[24]);
+        String lBuySellInd = plWxcLog[28];
+        String lBuyCcy = pExtExchQueue[12];
+        String lSellCcy = pExtExchQueue[14];
+        Double lBaseAmt = Double.parseDouble(plWxcLog[17]);
+        Double lContAmt = Double.parseDouble(plWxcLog[18]);
+        String lHostCode = pExtExchQueue[2];
+        Date lValueDate = stringToSqlDate(pExtExchQueue[16], fcubsDateFormat);
+
+        // Step 1: Determine amount availability
+        AvailabilityFlags avail = determineAmountAvailability(pBuyAmount, pSellAmount);
+        String lBuyAmtAvl = avail.buyAvl;
+        String lSellAmtAvl = avail.sellAvl;
+        pBuyAmount = avail.buyAmount;
+        pSellAmount = avail.sellAmount;
+
+        logger.logInfo("lBuyAmtAvl:" + lBuyAmtAvl);
+        logger.logInfo("lSellAmtAvl:" + lSellAmtAvl);
+
+        // Step 2: Calculate tolerance amounts
+        ToleranceResult tolResult;
+        if ("Not Settled".equals(lDealStatus) || "Settlement Not Required".equals(lDealStatus)) {
+            String pH1 = lBaseCcy + lContCcy;
+            String pH2 = lContCcy + lBaseCcy;
+            if (!fetchCurrencyPair(pCon, lBaseCcy, lContCcy, lBranchCode)) {
+                return false;
+            }
+            tolResult = calculateToleranceAmounts(
+                pTolLimit, pTolCcy, lBaseCcy, lContCcy, lExchRate,
+                pH1, pH2, lBranchCode, lValueDate, lHostCode
+            );
+        } else {
+            Double base = prAmt1ToAmt2Conversion(lBranchCode, pTolCcy, lBaseCcy, pTolLimit, lValueDate, lHostCode);
+            Double cont = prAmt1ToAmt2Conversion(lBranchCode, pTolCcy, lContCcy, pTolLimit, lValueDate, lHostCode);
+            tolResult = new ToleranceResult(base, cont);
+        }
+
+        Double lTolCalcAmtBase = tolResult.baseAmt;
+        Double lTolCalcAmtCont = tolResult.contAmt;
+
+        // Step 3: Load rate preference
+        String lRateReqPrf = loadRatePreference(pCon);
+
+        // Step 4: Run validation based on preference
+        boolean validationPassed;
+        if ("C".equals(lRateReqPrf)) {
+            validationPassed = validateClientPreference(
+                pCon, lBuySellInd, lBaseCcy, lContCcy, lBuyCcy, lSellCcy,
+                lBuyAmtAvl, lSellAmtAvl, pBuyAmount, pSellAmount,
+                lBaseAmt, lContAmt, lTolCalcAmtBase, lTolCalcAmtCont
+            );
+        } else {
+            validationPassed = validateMarketPreference(
+                pCon, lBuySellInd, lBaseCcy, lContCcy, lBuyCcy, lSellCcy,
+                lBuyAmtAvl, lSellAmtAvl, pBuyAmount, pSellAmount,
+                lBaseAmt, lContAmt, lTolCalcAmtBase, lTolCalcAmtCont
+            );
+        }
+
+        logger.logInfo("Returning from fnNonTrstValidate()..");
+        return validationPassed;
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        handleNonTrstValidationError(pCon, "WXCH-RSP-17", " Failed in non trusted validations");
+        return false;
+    }
+}
+
+// =============== Helper Methods ===============
+
+/**
+ * Determines availability flags and sanitizes amount values.
+ */
+private AvailabilityFlags determineAmountAvailability(Double buyAmount, Double sellAmount) {
+    String buyAvl = (buyAmount != null) ? "Y" : "N";
+    String sellAvl = (sellAmount != null) ? "Y" : "N";
+    return new AvailabilityFlags(
+        buyAvl,
+        sellAvl,
+        (buyAmount != null) ? buyAmount : 0.0,
+        (sellAmount != null) ? sellAmount : 0.0
+    );
+}
+
+/**
+ * Loads the rate request preference from the database.
+ */
+private String loadRatePreference(Connection pCon) {
+    try {
+        return gJdbcObj.loadRateReqPref(pCon);
+    } catch (Exception e) {
+        logger.logInfo("No rate preference record found");
+        return null; // defaults to Market Preference
+    }
+}
+
+/**
+ * Fetches currency pair details into the gCcyPair cache.
+ */
+private boolean fetchCurrencyPair(Connection pCon, String baseCcy, String contCcy, String branchCode) {
+    if (!fnCcyPairCache(pCon, baseCcy, contCcy, branchCode)) {
+        logger.logInfo("Failed in getting CCY Pair.");
+        return false;
+    }
+    return true;
+}
+
+/**
+ * Calculates tolerance amounts based on currency pair and exchange rate.
+ */
+private ToleranceResult calculateToleranceAmounts(
+        Double tolLimit, String tolCcy, String baseCcy, String contCcy,
+        Double exchRate, String pH1, String pH2, String branchCode, Date valueDate, String hostCode) {
+
+    // Case 1: Tolerance currency matches one of the deal currencies
+    if ((baseCcy != null && baseCcy.equals(tolCcy)) || (contCcy != null && contCcy.equals(tolCcy))) {
+        Double calcAmtBase = (baseCcy != null && baseCcy.equals(tolCcy)) ? tolLimit : 0.0;
+        Double calcAmtCont = 0.0;
+        Double tolRate = 0.0;
+
+        if (gCcyPair.get(pH1) != null) {
+            String[] ccyDetails = gCcyPair.get(pH1).split("~");
+            String quotation = ccyDetails[0];
+            tolRate = "D".equals(quotation) ? exchRate : round(1 / exchRate, 12);
+        } else if (gCcyPair.get(pH2) != null) {
+            String[] ccyDetails = gCcyPair.get(pH2).split("~");
+            String quotation = ccyDetails[0];
+            tolRate = "D".equals(quotation) ? round(1 / exchRate, 12) : exchRate;
+        }
+
+        if (contCcy != null && contCcy.equals(tolCcy)) {
+            calcAmtCont = tolLimit;
+        } else {
+            calcAmtCont = fnRoundAmt(pCon, contCcy, tolLimit * tolRate, branchCode);
+        }
+
+        logger.logInfo("lTolRate:" + tolRate);
+        logger.logInfo("lTolCalcAmtCont:" + calcAmtCont);
+        return new ToleranceResult(calcAmtBase, calcAmtCont);
+
+    } else {
+        // Case 2: Neither matches — convert via standard mid rate
+        logger.logInfo("None of the involved ccy is USD, fetch standard mid rate and perform conversion");
+        Double base = prAmt1ToAmt2Conversion(branchCode, tolCcy, baseCcy, tolLimit, valueDate, hostCode);
+        Double cont = prAmt1ToAmt2Conversion(branchCode, tolCcy, contCcy, tolLimit, valueDate, hostCode);
+        return new ToleranceResult(base, cont);
+    }
+}
+
+/**
+ * Validates based on Client Preference.
+ */
+private boolean validateClientPreference(
+        Connection pCon, String buySellInd, String baseCcy, String contCcy, String buyCcy, String sellCcy,
+        String buyAvl, String sellAvl, Double buyAmount, Double sellAmount,
+        Double baseAmt, Double contAmt, Double tolCalcAmtBase, Double tolCalcAmtCont) {
+
+    logger.logInfo("Client Preference");
+    logBuySellIndicator(buySellInd);
+
+    boolean isCurrencyMismatch = !contCcy.equals(buyCcy) || !baseCcy.equals(sellCcy);
+    boolean isAmountExceeded = ("Y".equals(buyAvl) && buyAmount > baseAmt + tolCalcAmtBase) ||
+                               ("Y".equals(sellAvl) && sellAmount > contAmt + tolCalcAmtCont);
+
+    return performValidationCheck(pCon, isCurrencyMismatch, isAmountExceeded, baseCcy, contCcy, contAmt);
+}
+
+/**
+ * Validates based on Market Preference.
+ */
+private boolean validateMarketPreference(
+        Connection pCon, String buySellInd, String baseCcy, String contCcy, String buyCcy, String sellCcy,
+        String buyAvl, String sellAvl, Double buyAmount, Double sellAmount,
+        Double baseAmt, Double contAmt, Double tolCalcAmtBase, Double tolCalcAmtCont) {
+
+    logger.logInfo("Market Preference");
+    logBuySellIndicator(buySellInd);
+
+    boolean isCurrencyMismatch = !contCcy.equals(buyCcy) || !baseCcy.equals(sellCcy);
+    boolean isAmountExceeded = ("Y".equals(buyAvl) && buyAmount > baseAmt + tolCalcAmtBase) ||
+                               ("Y".equals(sellAvl) && sellAmount > contAmt + tolCalcAmtCont);
+
+    return performValidationCheck(pCon, isCurrencyMismatch, isAmountExceeded, baseCcy, contCcy, contAmt);
+}
+
+/**
+ * Logs the buy/sell indicator (no state mutation).
+ */
+private void logBuySellIndicator(String buySellInd) {
+    if ("Sell".equals(buySellInd)) {
+        logger.logInfo("Sell Indicator");
+    } else {
+        logger.logInfo("Buy Indicator");
+    }
+}
+
+/**
+ * Performs the final validation check and updates class-level state.
+ */
+private boolean performValidationCheck(Connection pCon, boolean isCurrencyMismatch, boolean isAmountExceeded,
+                                      String baseCcy, String contCcy, Double contAmt) {
+    if (isCurrencyMismatch || isAmountExceeded) {
+        logger.logInfo("Failed in Wells Exchange Validations");
+        if (!fnGetErtbMsgs(pCon, "WXCH-RSP-06")) {
+            logger.logInfo("Failed in fetching error message.");
+            return false;
+        } else {
+            pErrCode = "WXCH-RSP-06";
+            pErrDesc += " for currency pair " + baseCcy + " and " + contCcy + ", amount " + contAmt;
+        }
+        pWxcPass = false;
+        pStatus = 1;
+    } else {
+        pWxcPass = true;
+    }
+    return true;
+}
+
+/**
+ * Centralized error handling for non-trusted validation failures.
+ */
+private void handleNonTrstValidationError(Connection pCon, String errorCode, String message) {
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+    if (fnGetErtbMsgs(pCon, errorCode)) {
+        pErrCode = errorCode;
+        pErrDesc += message;
+    }
+}
