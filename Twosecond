@@ -1,0 +1,240 @@
+/**
+ * Entry point to process WellsXchange log data.
+ * Returns a formatted response string or null on failure.
+ */
+public String prWellsXchangeLog(Connection pCon, String pQueueRefNo) {
+    logger.logInfo("Inside WellsXchangeProcedure.prWellsXchangeLog()..");
+
+    // Initialize instance variables (class-level)
+    pStatus = -1;
+    pRespStatus = null;
+    pErrCode = null;
+    pErrDesc = null;
+
+    // Local variables
+    String lWxcLogErrCode = null;
+    String lWxcLogStatus = null;
+    String lExchRate = null;
+    String lWxcLogRes = null;
+    String[] lWxcLog = null;
+    String pIsTrusted = null; // Class-level, but reset here for clarity
+
+    // New locals for GBFALM-4528
+    String lBranchCode = null;
+    String lDealSource = null;
+
+    logger.logInfo("Inside WellsXchangeProcedure.prWellsXchangeLog() checkpoint 1");
+    logger.logInfo("Creating connection in procedure now...");
+    logger.logInfo(pQueueRefNo);
+
+    try {
+        // Step 1: Load WXC data from database
+        lWxcLogRes = loadWxcData(pCon, pQueueRefNo);
+        if (lWxcLogRes == null) {
+            return null; // Early exit on DB failure
+        }
+        logger.logInfo(lWxcLogRes);
+
+        // Step 2: Parse the log response
+        lWxcLog = parseWxcLogResponse(lWxcLogRes);
+        if (lWxcLog == null || lWxcLog.length == 0) {
+            handleEmptyLogScenario(pCon);
+            return null;
+        }
+
+        // Step 3: Extract core fields from log
+        lWxcLogErrCode = getLogErrorCode(lWxcLog);
+        lWxcLogStatus = getLogStatus(lWxcLog);
+        lExchRate = getExchangeRate(lWxcLog); // For final return
+        lBranchCode = getBranchCode(lWxcLog);
+        lDealSource = getDealSource(lWxcLog);
+
+        // Step 4: Process error code (fetch message)
+        processWxcErrorCode(pCon, lWxcLogErrCode);
+
+        // Step 5: Validate log data integrity
+        if (validateWxcLogData(lWxcLog, lWxcLogErrCode, lWxcLogStatus)) {
+            logger.logInfo("WellsXchange response is empty");
+            pStatus = 1;
+            pRespStatus = "WXC FAIL";
+            return buildResponseString();
+        }
+
+        // Step 6: Perform WellsXchange validations
+        logger.logInfo("WellsXchange validations for the payment");
+        if (!fnProcessPmt(pCon, pQueueRefNo, lWxcLog)) {
+            logger.logInfo("Failed in logging fnProcessPmt");
+            handleValidationFailure(pCon);
+            return null;
+        }
+
+        // Step 7: Finalize response status and trusted source validation
+        finalizeResponseStatus(pCon, pQueueRefNo, lWxcLog, lBranchCode, lDealSource);
+
+        // Step 8: Prepare final output
+        logger.logInfo("Leaving prWellsXchangeLog()..");
+        return buildResponseString();
+
+    } catch (Exception e) {
+        e.printStackTrace();
+        pStatus = 1;
+        pRespStatus = "WXC FAIL";
+        if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+            logger.logInfo("Failed in fetching error message");
+        } else {
+            pErrCode = "WXCH-RSP-17";
+        }
+        gJdbcObj.updateWXCLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+        return null;
+    }
+}
+
+// ─────────────── Helper Methods ───────────────
+
+/**
+ * Loads WXC data from database.
+ * Returns null on failure (and logs exception).
+ */
+private String loadWxcData(Connection pCon, String pQueueRefNo) {
+    try {
+        String result = gJdbcObj.loadWXCData(pCon, pQueueRefNo);
+        logger.logInfo("Check point 2");
+        return result;
+    } catch (Exception e) {
+        e.printStackTrace();
+        return null;
+    }
+}
+
+/**
+ * Parses the WXC log response string into an array.
+ * Returns null if input is null, or empty array if parsing fails.
+ */
+private String[] parseWxcLogResponse(String wxcLogRes) {
+    if (wxcLogRes == null) {
+        return new String[0];
+    }
+    return wxcLogRes.split("~");
+}
+
+/**
+ * Extracts error code from log array.
+ */
+private String getLogErrorCode(String[] log) {
+    return log.length > 14 ? log[14] : null;
+}
+
+/**
+ * Extracts status from log array.
+ */
+private String getLogStatus(String[] log) {
+    return log.length > 13 ? log[13] : null;
+}
+
+/**
+ * Extracts exchange rate from log array.
+ */
+private String getExchangeRate(String[] log) {
+    return log.length > 24 ? log[24] : null;
+}
+
+/**
+ * Extracts branch code from log array.
+ */
+private String getBranchCode(String[] log) {
+    return log.length > 25 ? log[25] : null;
+}
+
+/**
+ * Extracts deal source from log array.
+ */
+private String getDealSource(String[] log) {
+    return log.length > 29 ? log[29] : null;
+}
+
+/**
+ * Processes the error code by fetching its message via fnGetErtbMsgs.
+ * Sets pErrCode and pErrDesc if successful.
+ */
+private void processWxcErrorCode(Connection pCon, String errCode) {
+    if (errCode != null && !errCode.trim().isEmpty()) {
+        if (fnGetErtbMsgs(pCon, errCode)) {
+            pErrCode = errCode;
+            // pErrDesc is set by fnGetErtbMsgs internally
+        }
+    }
+}
+
+/**
+ * Validates the integrity of the WXC log data.
+ * Returns true if invalid/empty, false if valid.
+ */
+private boolean validateWxcLogData(String[] wxcLog, String errCode, String status) {
+    // Check for null or invalid length
+    if (wxcLog == null || wxcLog.length < 25) {
+        return true;
+    }
+    // Check for specific invalid conditions
+    boolean hasErrorCode = errCode != null && !"0".equals(errCode) && !"6470".equals(errCode) && !"3870".equals(errCode);
+    boolean hasInvalidStatus = "Expired".equals(status) || "Canceled".equals(status);
+    return hasErrorCode || hasInvalidStatus;
+}
+
+/**
+ * Handles scenario where log is empty or null.
+ */
+private void handleEmptyLogScenario(Connection pCon) {
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+    if (fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+        pErrCode = "WXCH-RSP-17";
+        pErrDesc += " Failed in fetching WXC response log";
+    }
+}
+
+/**
+ * Handles failure during validation.
+ */
+private void handleValidationFailure(Connection pCon) {
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+    if (fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+        pErrCode = "WXCH-RSP-17";
+        pErrDesc += " Failed in performing WXC validations";
+    }
+}
+
+/**
+ * Finalizes the response status and handles trusted source validation.
+ */
+private void finalizeResponseStatus(Connection pCon, String pQueueRefNo, String[] wxcLog, String branchCode, String dealSource) {
+    // Set default status if not already set
+    if (pStatus == -1) {
+        pStatus = 0;
+    }
+    if (pRespStatus == null) {
+        pRespStatus = "WXC PASS";
+    }
+
+    // Handle trusted source check (GBFALM-4528)
+    if (branchCode != null && dealSource != null) {
+        if (!fnIsTrustedSource(pCon, branchCode, dealSource)) {
+            logger.logInfo("Non-trusted deal source");
+            pIsTrusted = "N";
+        }
+    }
+    // Ensure pIsTrusted is never null
+    if (pIsTrusted == null) {
+        pIsTrusted = "N";
+    }
+
+    // Update database with final status
+    gJdbcObj.updateWXCLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+}
+
+/**
+ * Builds and returns the final response string.
+ */
+private String buildResponseString() {
+    return pErrCode + "~" + pErrDesc + "~" + pStatus + "~" + lExchRate;
+}
