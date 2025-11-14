@@ -1,0 +1,234 @@
+import java.sql.Connection;
+import java.util.Date;
+
+// Lightweight result containers
+private static class ExchangeAmounts {
+    final Double buyAmount;
+    final Double sellAmount;
+    ExchangeAmounts(Double buy, Double sell) {
+        this.buyAmount = buy;
+        this.sellAmount = sell;
+    }
+}
+
+private static class ToleranceData {
+    final Double limit;
+    final String ccy;
+    final boolean success;
+    ToleranceData(Double limit, String ccy, boolean success) {
+        this.limit = limit;
+        this.ccy = ccy;
+        this.success = success;
+    }
+}
+
+/**
+ * Validates a payment against external exchange and tolerance rules.
+ */
+public boolean fnValidatePmt(Connection pCon, String pQueueRefNo, String[] plWxcLog) {
+    logger.logInfo("Inside fnValidatePmt checkpoint 1.1");
+
+    // Parse input log
+    Double lWxcExchRate = Double.parseDouble(plWxcLog[24]);
+    String lBranchCode = plWxcLog[25];
+    String lDealSource = plWxcLog[29];
+    String lDealStatus = plWxcLog[30];
+    Double lBaseAmt = Double.parseDouble(plWxcLog[17]);
+    Double lContAmt = Double.parseDouble(plWxcLog[18]);
+    String lValueDateType = plWxcLog[31];
+
+    logger.logInfo("Deal Source: " + lDealSource);
+    pTolRec = null;           // reset class-level tolerance record
+    pWxcPass = false;         // reset validation flag
+
+    // === Step 1: Fetch and parse external exchange data ===
+    String lExtExchQueueRes = fetchExternalExchangeData(pCon, pQueueRefNo);
+    if (lExtExchQueueRes == null) {
+        return false;
+    }
+
+    ExchangeAmounts amounts = parseExternalExchangeData(lExtExchQueueRes);
+    Double lBuyAmount = amounts.buyAmount;
+    Double lSellAmount = amounts.sellAmount;
+    String[] lExtExchQueue = lExtExchQueueRes.split("~");
+
+    // === Step 2: Parse all required dates (kept inline for clarity) ===
+    Date lValueDate = null, lDealDate = null, lStartDate = null, lEndDate = null, lRespValueDate = null;
+    try {
+        // Value date from external exchange queue
+        if (!(lExtExchQueue.length > 16 && ("null".equals(lExtExchQueue[16]) || lExtExchQueue[16] == null))) {
+            lValueDate = stringToSqlDate(lExtExchQueue[16], fcubsDateFormat);
+        }
+
+        // Deal date from input log
+        lDealDate = stringToSqlDate(plWxcLog[37], fcubsDateFormat);
+
+        // Window or Spot-specific dates
+        if ("Window".equals(lValueDateType)) {
+            lStartDate = stringToSqlDate(plWxcLog[32], fcubsDateFormat);
+            lEndDate = stringToSqlDate(plWxcLog[33], fcubsDateFormat);
+        } else if (!("null".equals(plWxcLog[15]) || plWxcLog[15] == null)) {
+            lRespValueDate = stringToSqlDate(plWxcLog[15], fcubsDateFormat);
+        }
+    } catch (Exception e) {
+        logger.logInfo("Failed during date parsing: " + e.getMessage());
+        handleValidationError("WXCH-RSP-17", " Failed in date parsing");
+        return false;
+    }
+
+    // === Step 3: Determine if deal source is trusted ===
+    checkTrustedSource(pCon, lBranchCode, lDealSource);
+
+    // === Step 4: Fetch tolerance data if needed (non-trusted + unsettled) ===
+    Double lTolLimit = null;
+    String lTolCcy = null;
+    if ("N".equals(pIsTrusted) &&
+        ("Not Settled".equals(lDealStatus) || "Settlement not required".equals(lDealStatus))) {
+
+        logger.logInfo("Fetch Tolerance maintained for the branch");
+        ToleranceData tolData = fetchToleranceData(pCon, lBranchCode);
+        if (!tolData.success) {
+            return false;
+        }
+        lTolLimit = tolData.limit;
+        lTolCcy = tolData.ccy;
+    }
+
+    // === Step 5: Run validation logic based on trust status ===
+    boolean validationPassed;
+    if ("N".equals(pIsTrusted)) {
+        logger.logInfo("Deal source is NOT trusted");
+        validationPassed = fnNonTrstValidate(pCon, plWxcLog, lExtExchQueue, lBuyAmount, lSellAmount, lTolLimit, lTolCcy);
+    } else {
+        logger.logInfo("Deal source is trusted");
+        validationPassed = fnTrustedValidate(pCon, plWxcLog, lExtExchQueue, lBuyAmount, lSellAmount);
+    }
+
+    if (!validationPassed) {
+        handleValidationError("WXCH-RSP-17", " Validation logic failed");
+        return false;
+    }
+
+    // === Step 6: Validate value date if pWxcPass was set to true by prior logic ===
+    if (pWxcPass) {
+        logger.logInfo("Performing value date validation. Type: " + lValueDateType);
+        Date effectiveValueDate = (lValueDate != null) ? lValueDate : lDealDate;
+
+        if ("Window".equals(lValueDateType)) {
+            if (effectiveValueDate != null && lStartDate != null && lEndDate != null &&
+                !effectiveValueDate.before(lStartDate) && !effectiveValueDate.after(lEndDate)) {
+                logger.logInfo("Value date is within allowed window");
+                pWxcPass = true;
+            } else {
+                logger.logInfo("Value date is outside allowed window");
+                pWxcPass = false;
+                handleValidationError("WXCH-RSP-06",
+                    " Value date " + (effectiveValueDate != null ? effectiveValueDate.toString() : "null") +
+                    " not in window [" + lStartDate + " - " + lEndDate + "]");
+            }
+        } else {
+            if (effectiveValueDate != null && lRespValueDate != null &&
+                effectiveValueDate.compareTo(lRespValueDate) == 0) {
+                logger.logInfo("Spot value date matches expected date");
+                pWxcPass = true;
+            } else {
+                logger.logInfo("Spot value date mismatch");
+                pWxcPass = false;
+                pStatus = 1;
+                handleValidationError("WXCH-RSP-06",
+                    " Expected value date: " + (lRespValueDate != null ? lRespValueDate.toString() : "null"));
+            }
+        }
+    }
+
+    // === Step 7: Finalize status ===
+    if (pWxcPass) {
+        logger.logInfo("WXC validation PASSED");
+        pRespStatus = "WXC PASS";
+        pStatus = 0;
+    } else {
+        logger.logInfo("WXC validation FAILED");
+        pRespStatus = "WXC FAIL";
+        pStatus = 1;
+    }
+
+    logger.logInfo("Returning from fnValidatePmt()");
+    return true;
+}
+
+// ─────────────── Helper Methods ───────────────
+
+/**
+ * Fetches external exchange queue record.
+ * Returns null on failure (and sets error via handleValidationError).
+ */
+private String fetchExternalExchangeData(Connection pCon, String pQueueRefNo) {
+    try {
+        String result = gJdbcObj.queryExtExchRateQueue(pCon, pQueueRefNo);
+        logger.logInfo("Successfully fetched external exchange data");
+        return result;
+    } catch (Exception e) {
+        e.printStackTrace();
+        logger.logInfo("Exception while fetching external exchange data");
+        handleValidationError("WXCH-RSP-17", " Failed to query external exchange queue");
+        return null;
+    }
+}
+
+/**
+ * Parses buy/sell amounts from external exchange response string.
+ */
+private ExchangeAmounts parseExternalExchangeData(String extExchRes) {
+    String[] parts = extExchRes.split("~");
+    Double buy = 0.0;
+    Double sell = 0.0;
+
+    if (parts.length > 13 && parts[13] != null && !"null".equals(parts[13])) {
+        buy = Double.parseDouble(parts[13]);
+    }
+    if (parts.length > 15 && parts[15] != null && !"null".equals(parts[15])) {
+        sell = Double.parseDouble(parts[15]);
+    }
+
+    logger.logInfo("Parsed exchange amounts: buy=" + buy + ", sell=" + sell);
+    return new ExchangeAmounts(buy, sell);
+}
+
+/**
+ * Sets pIsTrusted based on source and branch.
+ */
+private void checkTrustedSource(Connection pCon, String branchCode, String dealSource) {
+    boolean isTrusted = fnIsTrustedSource(pCon, branchCode, dealSource);
+    pIsTrusted = isTrusted ? "Y" : "N";
+    if (pIsTrusted == null) pIsTrusted = "N"; // defensive
+}
+
+/**
+ * Fetches and parses tolerance data for the branch.
+ */
+private ToleranceData fetchToleranceData(Connection pCon, String branchCode) {
+    if (!fnGetTolerance(pCon, branchCode)) {
+        logger.logInfo("Tolerance lookup failed for branch: " + branchCode);
+        return new ToleranceData(0.0, null, false);
+    }
+
+    String[] tolParts = pTolRec.split("~");
+    Double limit = Double.parseDouble(tolParts[0]);
+    String ccy = tolParts[1];
+    return new ToleranceData(limit, ccy, true);
+}
+
+/**
+ * Centralized error handling: sets pErrCode, pErrDesc, and logs.
+ */
+private void handleValidationError(String errorCode, String messageSuffix) {
+    if (fnGetErtbMsgs(pCon, errorCode)) {
+        pErrCode = errorCode;
+        pErrDesc += messageSuffix;
+        logger.logInfo("Set error: " + pErrCode + " - " + pErrDesc);
+    } else {
+        logger.logInfo("Failed to fetch error message for code: " + errorCode);
+    }
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+}
