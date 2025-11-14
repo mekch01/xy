@@ -1,0 +1,202 @@
+public String prWellsXchangeLog(Connection pCon, String pQueueRefNo) {
+    this.logger.logInfo("Inside WellsXchangeProcedure.prWellsXchangeLog()..");
+
+    // Initialize instance variables
+    pStatus = -1;
+    pRespStatus = null;
+    pErrCode = null;
+    pErrDesc = null;
+    pIsTrusted = null;
+    lExchRate = null;
+
+    // Log initial state
+    this.logger.logInfo("Inside WellsXchangeProcedure.prWellsXchangeLog() checkpoint 1");
+    this.logger.logInfo("Creating connection in procedure now...");
+    this.logger.logInfo(pQueueRefNo);
+
+    // GBFALM-4528 starts
+    String lBranchCode = null;
+    String lDealSource = null;
+
+    try {
+        // Step 1: Load Data
+        String lWxcLogRes = gJdbcObj.loadWXData(pCon, pQueueRefNo);
+        this.logger.logInfo("Check point 2");
+        this.logger.logInfo(lWxcLogRes);
+
+        // Step 2: Parse Response
+        String[] lWxcLog = lWxcLogRes.split("~");
+        this.logger.logInfo("prWellsXchangeLog()..checkpoint 2");
+
+        // Handle empty response
+        if (lWxcLog.length == 0) {
+            handleEmptyResponse(pCon);
+            return buildReturnString(); // Early return for failure case
+        }
+
+        // Step 3: Process Valid Response
+        // Pass lWxcLog to the helper method so it can access the array elements.
+        processValidResponse(pCon, lWxcLog);
+
+        // Step 4: Set Final Status if not already set
+        if (pStatus == -1) {
+            pStatus = 0;
+        }
+        if (pRespStatus == null) {
+            pRespStatus = "WXC PASS";
+        }
+
+        // Step 5: GBFALM-4528 Logic
+        lBranchCode = lWxcLog[25];
+        lDealSource = lWxcLog[29];
+        if (!fnIsTrustedSource(pCon, lBranchCode, lDealSource)) {
+            this.logger.logInfo("Non-trusted deal source");
+            pIsTrusted = "N";
+        }
+        if (pIsTrusted == null) {
+            pIsTrusted = "N";
+        }
+
+        // Step 6: Update Log
+        gJdbcObj.updateWXLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+
+    } catch (Exception e) {
+        // Handle any unexpected exception
+        handleUnexpectedException(e, pCon);
+        return null; // Return null on critical failure
+    }
+
+    // Step 7: Final Logging and Return
+    this.logger.logInfo("Leaving prWellsXchangeLog()..");
+    lExchRate = lWxcLog[24]; // This is safe because we are in the successful path
+
+    return buildReturnString();
+}
+
+// --- HELPER METHODS ---
+
+/**
+ * Handles the case where the loaded log response is empty.
+ */
+private void handleEmptyResponse(Connection pCon) {
+    this.logger.logInfo("prWellsXchangeLog()..checkpoint 3");
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+    if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+        this.logger.logInfo("Failed in fetching error message");
+    } else {
+        pErrCode = "WXCH-RSP-17";
+        pErrDesc += " Failed in fetching WXC response log";
+    }
+}
+
+/**
+ * Processes a non-empty log response array.
+ */
+private void processValidResponse(Connection pCon, String[] lWxcLog) {
+    this.logger.logInfo("prWellsXchangeLog()..checkpoint 4");
+    try {
+        // Extract error code and status from the log
+        // We get these values back from the helper method.
+        String extractedErrCode = extractErrorCodeAndStatus(lWxcLog);
+        String extractedStatus = lWxcLog[13]; // Directly access status from the array
+
+        // Fetch error message based on the extracted code
+        fetchErrorMessage(pCon, extractedErrCode); // Pass the code to the helper
+
+        // Determine if there's an error or invalid status
+        boolean hasErrorCode = extractedErrCode != null && !"0".equals(extractedErrCode) &&
+                !"6470".equals(extractedErrCode) && !"3870".equals(extractedErrCode);
+        boolean hasInvalidStatus = "Expired".equals(extractedStatus) || "Canceled".equals(extractedStatus);
+
+        if (hasErrorCode || hasInvalidStatus) {
+            this.logger.logInfo("WellsXchange response is empty");
+            pStatus = 1;
+            pRespStatus = "WXC FAIL";
+            return; // Exit early if we have a known failure condition
+        }
+
+        // Perform payment validations
+        if (!fnProcessPmt(pCon, pQueueRefNo, lWxcLog)) {
+            this.logger.logInfo("Failed in login fnProcessPmt");
+            pStatus = 1;
+            pRespStatus = "WXC FAIL";
+            if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+                this.logger.logInfo("Failed in fetching error message");
+            } else {
+                pErrCode = "WXCH-RSP-17";
+                pErrDesc += " Failed in performing WXC validations";
+            }
+        }
+
+    } catch (Exception e) {
+        // If processing fails, mark as general failure
+        pStatus = 1;
+        pRespStatus = "WXC FAIL";
+        if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+            this.logger.logInfo("Failed in fetching error message");
+        } else {
+            pErrCode = "WXCH-RSP-17";
+            pErrDesc += " Failed in processing WXC data";
+        }
+    }
+}
+
+/**
+ * Extracts the error code from the log array and returns it.
+ * Also sets the pErrCode instance variable.
+ * @param lWxcLog The parsed log array.
+ * @return The extracted error code string.
+ */
+private String extractErrorCodeAndStatus(String[] lWxcLog) {
+    this.logger.logInfo("prWellsXchangeLog()..checkpoint 5");
+    String lWxcLogErrCode = lWxcLog[14]; // Declare locally here
+
+    if (lWxcLogErrCode == null) {
+        pErrCode = null;
+    } else {
+        if (lWxcLogErrCode.charAt(0) == '-') {
+            pErrCode = "WXC" + lWxcLogErrCode;
+        } else {
+            pErrCode = "WXC-" + lWxcLogErrCode;
+        }
+        this.logger.logInfo("pErrCode" + pErrCode);
+    }
+    return lWxcLogErrCode; // Return it for use in the calling method
+}
+
+/**
+ * Fetches the error message for the given error code.
+ * @param pCon The database connection.
+ * @param errCode The error code to fetch the message for.
+ */
+private void fetchErrorMessage(Connection pCon, String errCode) {
+    if (!fnGetErtbMsgs(pCon, errCode)) {
+        this.logger.logInfo("Failed in fetching error message");
+    } else {
+        this.logger.logInfo("Successfully fetched error message:" + pErrDesc);
+    }
+}
+
+/**
+ * Handles any unexpected exception that occurs during execution.
+ */
+private void handleUnexpectedException(Exception e, Connection pCon) {
+    e.printStackTrace();
+    pStatus = 1;
+    pRespStatus = "WXC FAIL";
+    if (!fnGetErtbMsgs(pCon, "WXCH-RSP-17")) {
+        this.logger.logInfo("Failed in fetching error message");
+    } else {
+        pErrCode = "WXCH-RSP-17";
+    }
+    gJdbcObj.updateWXLog(pCon, pRespStatus, pIsTrusted, pQueueRefNo);
+}
+
+/**
+ * Builds the final return string from the current state of instance variables.
+ * @return The formatted result string.
+ */
+private String buildReturnString() {
+    return pErrCode + "~" + pErrDesc + "~" + pStatus + "~" + lExchRate;
+}
